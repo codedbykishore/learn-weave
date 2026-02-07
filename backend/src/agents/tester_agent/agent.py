@@ -85,7 +85,7 @@ class TesterAgent(StandardAgent):
     Uses ValidatedCodeAgent for shared validation logic.
     """
 
-    def __init__(self, app_name: str, session_service, iterations: int = 2):
+    def __init__(self, app_name: str, session_service, iterations: int = 1):
         self.inital_tester = InitialTesterAgent(app_name=app_name, session_service=session_service)
         self.code_review = CodeReviewAgent(app_name=app_name, session_service=session_service)
         self.validated_agent = ValidatedCodeAgent(
@@ -114,6 +114,26 @@ Your response should start with () => and end with a curly brace.
         :return: The corrected question dictionary if successful, otherwise None.
         """
         code = question['question']
+        
+        # Skip validation for simple questions (plain text with basic JSX)
+        # Only validate if question contains complex components or syntax that commonly has errors
+        needs_validation = any(keyword in code for keyword in [
+            'Recharts',      # Complex charting library
+            'className=',    # Common typo: className vs class
+            'style={',       # Inline styles with objects
+            '.map(',         # Array methods that might have syntax errors
+            'useState',      # React hooks
+            'useEffect',     # React hooks
+            'onClick',       # Event handlers
+            'onChange',      # Event handlers
+            '{...}',         # Spread operators
+            'svg',           # SVG elements
+        ])
+        
+        if not needs_validation:
+            # Simple question, skip validation to save time (reduces from ~4.5min to ~3min)
+            question['question'] = clean_up_response(code)
+            return question
         
         # Create content with the initial code to validate
         content = create_text_query(code)

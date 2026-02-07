@@ -71,7 +71,7 @@ class ExplainerAgent(StandardAgent):
     Custom loop agent to provide a feedback loop between the explainer and the react parser.
     Uses ValidatedCodeAgent for shared validation logic.
     """
-    def __init__(self, app_name: str, session_service, iterations = 5):
+    def __init__(self, app_name: str, session_service, iterations = 3):
         self.explainer = CodingExplainer(app_name=app_name, session_service=session_service)
         self.validated_agent = ValidatedCodeAgent(
             inner_agent=self.explainer,
