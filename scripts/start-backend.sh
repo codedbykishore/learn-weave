@@ -19,7 +19,7 @@ if [ ! -f ".env" ]; then
 fi
 
 # Check if ChromaDB is running
-if ! docker ps --format '{{.Names}}' | grep -q "learnweave-chromadb"; then
+if ! sudo docker ps --format '{{.Names}}' 2>/dev/null | grep -q "learnweave-chromadb"; then
     echo "⚠ Warning: ChromaDB is not running"
     echo "  Start it with: ./scripts/start-chromadb.sh"
     echo ""

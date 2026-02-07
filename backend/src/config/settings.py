@@ -106,7 +106,7 @@ UNSPLASH_ACCESS_KEY = os.getenv("UNSPLASH_ACCESS_KEY")
 UNSPLASH_SECRET_KEY = os.getenv("UNSPLASH_SECRET_KEY")
 
 
-CHROMA_DB_URL = os.getenv("CHROMA_DB_URL", "http://localhost:8000")
+CHROMA_DB_URL = os.getenv("CHROMA_DB_URL", "http://localhost:8001")
 
 
 AGENT_DEBUG_MODE = os.getenv("AGENT_DEBUG_MODE", "true").lower() == "true"
