@@ -41,7 +41,7 @@ import userService from '../api/userService';
 import { toast } from 'react-toastify';
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { IconLanguage, IconSun, IconMoonStars } from '@tabler/icons-react';
+import { IconSun, IconMoonStars } from '@tabler/icons-react';
 import { Switch, useMantineColorScheme } from '@mantine/core';
 
 // Create styles for the SettingsPage components

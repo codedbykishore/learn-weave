@@ -28,11 +28,11 @@
     "error": "Error loading search results"
   },
   "loader": {
-    "loadingContent": "Inhalt wird geladen",
-    "preparingComponents": "Interaktive Komponenten werden vorbereitet. Dies kann einen Moment dauern...",
+    "loadingContent": "Loading content",
+    "preparingComponents": "Preparing interactive components. This may take a moment...",
     "visualization": {
-      "loading": "Visualisierung wird geladen...",
-      "thisMayTakeAMoment": "Dies kann einen Moment dauern"
+      "loading": "Loading visualization...",
+      "thisMayTakeAMoment": "This may take a moment"
     }
   }
 }

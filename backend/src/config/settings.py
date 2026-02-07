@@ -101,12 +101,9 @@ DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
 DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "https://www.learnweave.ai/api/discord/callback")
 
 
-
-UNSPLASH_ACCESS_KEY = os.getenv("UNSPLASH_ACCESS_KEY")
-UNSPLASH_SECRET_KEY = os.getenv("UNSPLASH_SECRET_KEY")
-
-
 CHROMA_DB_URL = os.getenv("CHROMA_DB_URL", "http://localhost:8001")
 
+# Default fallback image for courses/chapters when generation fails
+DEFAULT_COURSE_IMAGE = "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=800&q=80"
 
 AGENT_DEBUG_MODE = os.getenv("AGENT_DEBUG_MODE", "true").lower() == "true"

@@ -16,6 +16,7 @@ from google.adk.sessions import InMemorySessionService
 
 from ..utils import create_text_query, load_instruction_from_file
 from ..agent import StandardAgent
+from ...config.settings import DEFAULT_COURSE_IMAGE
 
 logger = getLogger(__name__)
 
@@ -204,13 +205,12 @@ IMPORTANT: The image must be visually distinct and specific to THIS chapter's to
             }
         except Exception as e:
             logger.error("Image generation failed: %s", str(e))
-            fallback_url = "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=800&q=80"
             return {
                 "status": "error",
                 "error": str(e),
-                "url": fallback_url,
-                "explanation": fallback_url,
-                "fallback_url": fallback_url
+                "url": DEFAULT_COURSE_IMAGE,
+                "explanation": DEFAULT_COURSE_IMAGE,
+                "fallback_url": DEFAULT_COURSE_IMAGE
             }
 
 

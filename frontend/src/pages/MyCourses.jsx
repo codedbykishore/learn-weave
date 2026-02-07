@@ -219,9 +219,9 @@ function MyCourses() {
       >
         <Group position="apart">
           <div>
-            <Title order={2}>{t('myCoursesTitle', { defaultValue: 'Meine Kurse' })}</Title>
+            <Title order={2}>{t('myCoursesTitle', { defaultValue: 'My Courses' })}</Title>
             <Text color="dimmed" mt={4}>
-              {t('myCoursesSubtitle', { defaultValue: 'Verwalte und durchsuche deine persönlichen Kurse.' })}
+              {t('myCoursesSubtitle', { defaultValue: 'Manage and browse your personal courses.' })}
             </Text>
           </div>
           <IconBook size={40} color={theme.colors.blue[5]} stroke={1.5} />
@@ -229,7 +229,7 @@ function MyCourses() {
       </Box>
 
       <TextInput
-        placeholder={t('searchMyCoursesPlaceholder', { ns: 'dashboard', defaultValue: 'Kurse durchsuchen...' })}
+        placeholder={t('searchMyCoursesPlaceholder', { ns: 'dashboard', defaultValue: 'Search courses...' })}
         value={searchQuery}
         onChange={(event) => setSearchQuery(event.currentTarget.value)}
         icon={<IconSearch size={16} />}
@@ -242,13 +242,13 @@ function MyCourses() {
             <IconBook size={60} color={theme.colors.gray[6]} stroke={1.5} />
             <Title order={3} align="center">
               {searchQuery 
-                ? t('noSearchResults', { defaultValue: 'Keine Kurse gefunden' }) 
-                : t('noCoursesYet', { defaultValue: 'Noch keine Kurse vorhanden' })}
+                ? t('noSearchResults', { defaultValue: 'No courses found' }) 
+                : t('noCoursesYet', { defaultValue: 'No courses yet' })}
             </Title>
             <Text color="dimmed" size="sm" align="center">
               {searchQuery 
-                ? t('tryDifferentKeywords', { defaultValue: 'Versuche es mit anderen Suchbegriffen.' }) 
-                : t('createFirstCourse', { defaultValue: 'Erstelle deinen ersten Kurs, um loszulegen.' })}
+                ? t('tryDifferentKeywords', { defaultValue: 'Try different search terms.' }) 
+                : t('createFirstCourse', { defaultValue: 'Create your first course to get started.' })}
             </Text>
             {!searchQuery && (
               <Button 
@@ -256,7 +256,7 @@ function MyCourses() {
                 onClick={() => navigate('/create-course')}
                 mt="md"
               >
-                {t('createCourseButton', { defaultValue: 'Kurs erstellen' })}
+                {t('createCourseButton', { defaultValue: 'Create Course' })}
               </Button>
             )}
           </Stack>
@@ -333,17 +333,17 @@ function MyCourses() {
                   </Group>
                   
                   <Text weight={500} lineClamp={2} mt="xs" mb="sm" style={{ minHeight: '3em' }}>
-                    {course.title || t('untitledCourse', { defaultValue: 'Unbenannter Kurs' })}
+                    {course.title || t('untitledCourse', { defaultValue: 'Untitled Course' })}
                   </Text>
 
                   <Text size="sm" color="dimmed" lineClamp={3} style={{ flexGrow: 1, marginBottom: '1rem' }}>
-                    {course.description || t('noDescription', { defaultValue: 'Keine Beschreibung' })}
+                    {course.description || t('noDescription', { defaultValue: 'No description' })}
                   </Text>
 
                   <Box mb="md">
                     <Group position="apart" mb={5}>
                       <Text size="sm" color="dimmed">
-                        {t('progress', { defaultValue: 'Fortschritt' })}
+                        {t('progress', { defaultValue: 'Progress' })}
                       </Text>
                       <Text size="sm" weight={500}>
                         {progress}%
@@ -373,16 +373,16 @@ function MyCourses() {
       <Modal
         opened={deleteModalOpen}
         onClose={() => setDeleteModalOpen(false)}
-        title={t('deleteModal.title', { defaultValue: 'Kurs löschen' })}
+        title={t('deleteModal.title', { defaultValue: 'Delete Course' })}
         centered
       >
-        <Text>{t('deleteModal.confirmation', { defaultValue: 'Möchtest du diesen Kurs wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.' })}</Text>
+        <Text>{t('deleteModal.confirmation', { defaultValue: 'Are you sure you want to delete this course? This action cannot be undone.' })}</Text>
         <Group position="right" mt="md">
           <Button variant="default" onClick={() => setDeleteModalOpen(false)}>
-            {t('cancel', { defaultValue: 'Abbrechen' })}
+            {t('cancel', { defaultValue: 'Cancel' })}
           </Button>
           <Button color="red" onClick={confirmDeleteHandler}>
-            {t('delete', { defaultValue: 'Löschen' })}
+            {t('delete', { defaultValue: 'Delete' })}
           </Button>
         </Group>
       </Modal>
@@ -391,12 +391,12 @@ function MyCourses() {
       <Modal
         opened={renameModalOpen}
         onClose={() => setRenameModalOpen(false)}
-        title={t('renameModal.title', { defaultValue: 'Kurs bearbeiten' })}
+        title={t('renameModal.title', { defaultValue: 'Edit Course' })}
         size="lg"
       >
         <Stack spacing="md">
           <TextInput
-            label={t('title', { defaultValue: 'Titel' })}
+            label={t('title', { defaultValue: 'Title' })}
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             required
@@ -410,20 +410,20 @@ function MyCourses() {
           />
           
           <Switch
-            label={t('publicCourse', { defaultValue: 'Öffentlich sichtbar' })}
+            label={t('publicCourse', { defaultValue: 'Publicly visible' })}
             checked={isPublic}
             onChange={(e) => setIsPublic(e.currentTarget.checked)}
             description={t('publicCourseDescription', { 
-              defaultValue: 'Andere Nutzer können diesen Kurs finden und darauf zugreifen.' 
+              defaultValue: 'Other users can find and access this course.' 
             })}
           />
           
           <Group position="right" mt="md">
             <Button variant="default" onClick={() => setRenameModalOpen(false)}>
-              {t('cancel', { defaultValue: 'Abbrechen' })}
+              {t('cancel', { defaultValue: 'Cancel' })}
             </Button>
             <Button onClick={confirmRenameHandler}>
-              {t('saveChanges', { defaultValue: 'Änderungen speichern' })}
+              {t('saveChanges', { defaultValue: 'Save Changes' })}
             </Button>
           </Group>
         </Stack>

@@ -13,6 +13,7 @@ from google.genai import types
 from ..agent import StructuredAgent, StandardAgent
 from ..code_checker.code_checker import ESLintValidator, clean_up_response
 from ..utils import load_instruction_from_file, create_text_query, load_instructions_from_files
+from ..validated_agent import ValidatedCodeAgent
 from .schema import Test
 
 def get_full_instructions(code_review: bool = False,):
@@ -81,19 +82,31 @@ class TesterAgent(StandardAgent):
     """
     Custom loop agent to provide a feedback loop between the explainer and the react parser.
     This agent runs code review for each generated question in parallel for efficiency.
+    Uses ValidatedCodeAgent for shared validation logic.
     """
 
     def __init__(self, app_name: str, session_service, iterations: int = 2):
         self.inital_tester = InitialTesterAgent(app_name=app_name, session_service=session_service)
         self.code_review = CodeReviewAgent(app_name=app_name, session_service=session_service)
-        self.eslint = ESLintValidator()
-        self.iterations = iterations
+        self.validated_agent = ValidatedCodeAgent(
+            inner_agent=self.code_review,
+            validator=ESLintValidator(),
+            max_iterations=iterations,
+            error_message_template="""
+Please fix the errors in the following code:
+{code}
+The code generated the following errors:
+{errors}
 
-    async def _review_and_correct_question(self, question: Dict[str, Any], user_id: str, state: dict) -> Optional[
-        Dict[str, Any]]:
+Please try again and rewrite the code from scratch, without explanation.
+Your response should start with () => and end with a curly brace.
+"""
+        )
+
+    async def _review_and_correct_question(self, question: Dict[str, Any], user_id: str, state: dict) -> Optional[Dict[str, Any]]:
         """
         Processes a single question, attempting to validate and correct its code.
-        This method will run in a loop up to `self.iterations` times.
+        Uses ValidatedCodeAgent for automatic validation loop.
 
         :param question: A dictionary representing a single question.
         :param user_id: The ID of the user.
@@ -101,37 +114,24 @@ class TesterAgent(StandardAgent):
         :return: The corrected question dictionary if successful, otherwise None.
         """
         code = question['question']
-        for i in range(self.iterations):
-            validation_check = self.eslint.validate_jsx(code)
-            if validation_check['valid']:
-                question['question'] = clean_up_response(code)
-                # Successfully validated and cleaned, return the result.
-                return question
-
-            # If not valid, prepare for a review iteration
-            print(
-                f"!!WARNING: Question failed validation (Attempt {i + 1}/{self.iterations}). Errors: \n{json.dumps(validation_check['errors'], indent=2)}")
-            content = create_text_query(
-                f"""
-                Please fix the errors in the following code:
-                {code}
-                The code generated the following errors:
-                {json.dumps(validation_check['errors'], indent=2)}
-
-                Please try again and rewrite the code from scratch, without explanation.
-                Your response should start with () => and end with a curly brace.
-                """
-            )
-            # Await the correction from the code review agent
-            response = await self.code_review.run(user_id=user_id, state=state, content=content)
-            if 'explanation' not in response:
-                break
-            else:
-                code = response['explanation']
-
-        # If the loop completes without returning, it means the code could not be fixed.
-        print(f"!!ERROR: Could not fix code for a question after {self.iterations} iterations. Discarding question.")
-        return None
+        
+        # Create content with the initial code to validate
+        content = create_text_query(code)
+        
+        # Use validated agent to validate and potentially correct the code
+        result = await self.validated_agent.run_with_validation(
+            user_id=user_id,
+            state=state,
+            content=content,
+            debug=False
+        )
+        
+        if result.get('success'):
+            question['question'] = result['explanation']
+            return question
+        else:
+            print(f"!!ERROR: Could not fix code for a question. Discarding question.")
+            return None
 
     async def run(self, user_id: str, state: dict, content: types.Content, debug: bool = False) -> Dict[str, Any]:
         """

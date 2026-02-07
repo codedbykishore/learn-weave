@@ -1114,7 +1114,7 @@ function AppLayout() {
                   <IconMenu2 size={Math.round(16 * scale)} />
                 </ThemeIcon>
                 <Text weight={500} sx={{ whiteSpace: "nowrap", fontSize: `${bottomTextSize}px` }}>
-                  {t('more', { ns: 'navigation', defaultValue: 'Mehr' })}
+                  {t('more', { ns: 'navigation', defaultValue: 'More' })}
                 </Text>
               </Stack>
             </UnstyledButton>

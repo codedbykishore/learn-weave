@@ -37,14 +37,14 @@ User Answer: {users_answer}
 
     def get_explainer_query(self, user_id, course_id, chapter_idx, language: str, difficulty: str, ragInfos: list):
         chapter = self.sm.get_state(user_id, course_id)['chapters'][chapter_idx]
+        note_text = f"Note by Planner Agent: {json.dumps(chapter.get('note'), indent=2)}\n                " if chapter.get('note') else ""
         pretty_chapter = \
             f"""
                 Chapter {chapter_idx + 1}:
                 Caption: {chapter['caption']}
                 Time in Minutes: {chapter['time']}
                 Content Summary: \n{json.dumps(chapter['content'], indent=2)}
-                Note by Planner Agent: {json.dumps(chapter['note'], indent=2)}
-                Response Language: {language}
+                {note_text}Response Language: {language}
                 Response Difficulty: {difficulty}
 
                 The following additional information was uploaded by the User. 
@@ -55,17 +55,101 @@ User Answer: {users_answer}
 
     def get_explainer_image_query(self, user_id, course_id, chapter_idx):
         chapter = self.sm.get_state(user_id, course_id)['chapters'][chapter_idx]
+        note_text = f"Note by Planner Agent: {json.dumps(chapter.get('note'), indent=2)}\n            " if chapter.get('note') else ""
         pretty_chapter = \
             f"""
                 Caption: {chapter['caption']}
                 Content Summary: \n{json.dumps(chapter['content'], indent=2)}
-                Note by Planner Agent: {json.dumps(chapter['note'], indent=2)}
-            """
+                {note_text}"""
         return create_text_query(pretty_chapter)
 
     @staticmethod
     def get_info_query(request, docs, images):
         """Get the query for the info agent"""
+        doc_data = []
+        text_extensions = {'.txt', '.md', '.py', '.js', '.html', '.css', '.json', '.xml', '.csv', '.yaml', '.yml'}
+
+        for doc in docs:
+            ext = doc.filename.lower().split('.')[-1] if '.' in doc.filename else ''
+
+            try:
+                if doc.filename.lower().endswith('.pdf'):
+                    pdf_doc = fitz.open(stream=doc.file_data, filetype="pdf")
+                    text = "".join(page.get_text() for page in pdf_doc)
+                    pdf_doc.close()
+                elif f'.{ext}' in text_extensions:
+                    text = doc.file_data.decode('utf-8', errors='ignore')
+                else:
+                    continue  # Skip non-text files
+
+                lines = text.strip().splitlines()[:10]
+                doc_data.append(f"{doc.filename}:\n" + "\n".join(lines))
+
+            except Exception as e:
+                print(f"Error processing {doc.filename}: {e}")
+
+        print("EIERLECKER" + json.dumps(doc_data, indent=2))
+        return create_text_query(
+        f"""
+            The following is the user query for creating a course / learning path:
+            {request.query}
+            The users uploaded the following documents:
+            {json.dumps(doc_data, indent=2)}
+            {[img.filename for img in images]}
+            Response Language: {request.language}
+            Response Language: {request.language}
+            Response Difficulty: {request.difficulty}
+        """)
+
+    @staticmethod
+    def get_planner_retriever_query(request, docs, images):
+        """
+        Get the query for the combined PlannerRetrieverAgent (replaces get_info_query + get_planner_query)
+        """
+        doc_data = []
+        text_extensions = {'.txt', '.md', '.py', '.js', '.html', '.css', '.json', '.xml', '.csv', '.yaml', '.yml'}
+
+        for doc in docs:
+            ext = doc.filename.lower().split('.')[-1] if '.' in doc.filename else ''
+
+            try:
+                if doc.filename.lower().endswith('.pdf'):
+                    pdf_doc = fitz.open(stream=doc.file_data, filetype="pdf")
+                    text = "".join(page.get_text() for page in pdf_doc)
+                    pdf_doc.close()
+                elif f'.{ext}' in text_extensions:
+                    text = doc.file_data.decode('utf-8', errors='ignore')
+                else:
+                    continue  # Skip non-text files
+
+                lines = text.strip().splitlines()[:10]
+                doc_data.append(f"{doc.filename}:\n" + "\n".join(lines))
+
+            except Exception as e:
+                print(f"Error processing {doc.filename}: {e}")
+
+        query = f"""
+            The following is the user query for creating a course / learning path:
+            {request.query}
+            
+            The user uploaded the following documents:
+            {json.dumps(doc_data, indent=2)}
+            {[img.filename for img in images]}
+            
+            Question: How many hours do you want to invest?
+            Answer: {request.time_hours}
+            
+            Question: What language do you want to learn in?
+            Answer: {request.language}
+            
+            Question: What difficulty level?
+            Answer: {request.difficulty}
+        """
+        return create_docs_query(query, docs, images)
+
+    @staticmethod
+    def get_info_query(request, docs, images):
+        """Get the query for the info agent (DEPRECATED - use get_planner_retriever_query instead)"""
         doc_data = []
         text_extensions = {'.txt', '.md', '.py', '.js', '.html', '.css', '.json', '.xml', '.csv', '.yaml', '.yml'}
 

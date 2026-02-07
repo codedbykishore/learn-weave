@@ -4,6 +4,7 @@ This file defines the service that coordinates the interaction between all the a
 import json
 import asyncio
 import traceback
+import time
 from typing import List
 from logging import getLogger
 
@@ -22,15 +23,15 @@ from ..db.crud import chapters_crud, documents_crud, images_crud, questions_crud
 
 from google.adk.sessions import InMemorySessionService
 
-from ..agents.planner_agent import PlannerAgent
-from ..agents.info_agent.agent import InfoAgent
-
+from ..agents.planner_retriever_agent import PlannerRetrieverAgent
 from ..agents.image_agent.agent import ImageAgent
 
 from ..agents.tester_agent import TesterAgent
 from ..agents.utils import create_text_query
 from ..db.models.db_course import CourseStatus
 from ..api.schemas.course import CourseRequest
+from ..config.settings import DEFAULT_COURSE_IMAGE
+from ..agents.retry_handler import retry_async_call
 #from ..services.notification_service import WebSocketConnectionManager
 from ..db.models.db_course import Course
 from ..db.database import get_db_context
@@ -46,49 +47,6 @@ from ..db.crud import usage_crud
 logger = getLogger(__name__)
 
 
-async def retry_with_backoff(func, max_retries=3, initial_delay=1, backoff_factor=2):
-    """
-    Retry a function with exponential backoff for handling rate limit errors.
-    
-    Args:
-        func: Async function to retry
-        max_retries: Maximum number of retry attempts
-        initial_delay: Initial delay in seconds before first retry
-        backoff_factor: Multiplier for delay on each retry
-    
-    Returns:
-        Result of the function call
-    
-    Raises:
-        Last exception if all retries fail
-    """
-    delay = initial_delay
-    last_exception = None
-    
-    for attempt in range(max_retries + 1):
-        try:
-            return await func()
-        except Exception as e:
-            last_exception = e
-            error_str = str(e)
-            
-            # Check if it's a 429 rate limit error
-            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-                if attempt < max_retries:
-                    logger.warning(f"Rate limit hit (429), retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
-                    await asyncio.sleep(delay)
-                    delay *= backoff_factor
-                    continue
-                else:
-                    logger.error(f"Rate limit exceeded after {max_retries} retries")
-            
-            # For non-rate-limit errors, raise immediately
-            raise
-    
-    # If we've exhausted all retries
-    raise last_exception
-
-
 class AgentService:
     def __init__(self):
         
@@ -99,8 +57,7 @@ class AgentService:
         self.query_service = QueryService(self.state_manager)
         
         # define agents
-        self.info_agent = InfoAgent(self.app_name, self.session_service)
-        self.planner_agent = PlannerAgent(self.app_name, self.session_service)
+        self.planner_retriever_agent = PlannerRetrieverAgent(self.app_name, self.session_service)
         self.coding_agent = ExplainerAgent(self.app_name, self.session_service)
         self.tester_agent = TesterAgent(self.app_name, self.session_service)
         self.image_agent = ImageAgent(self.app_name, self.session_service)
@@ -148,6 +105,7 @@ class AgentService:
         #ws_manager (WebSocketConnectionManager): Manager to send messages over WebSockets.
         """
         course_db = None
+        start_time = time.time()  # Start timing the course creation
         try:
             logger.info("[%s] Starting course creation for user %s", task_id, user_id)
 
@@ -188,29 +146,35 @@ class AgentService:
                 documents=docs
             )
 
-            # Get a short course title and description from the info_agent with retry
-            info_response = await retry_with_backoff(
-                lambda: self.info_agent.run(
-                    user_id=user_id,
-                    state={},
-                    content=self.query_service.get_info_query(request, docs, images,)
-                ),
+            # Call combined PlannerRetrieverAgent - gets course info AND learning path in one call
+            logger.info("[%s] Calling PlannerRetrieverAgent for course info + learning path...", task_id)
+            planner_response = await retry_async_call(
+                self.planner_retriever_agent.run,
+                user_id=user_id,
+                state={},
+                content=self.query_service.get_planner_retriever_query(request, docs, images),
+                debug=True,
                 max_retries=3,
                 initial_delay=5,
                 backoff_factor=2
             )
-            logger.info("[%s] InfoAgent response: %s", task_id, info_response['title'])
+            
+            if not planner_response or "title" not in planner_response or "chapters" not in planner_response:
+                raise ValueError(f"PlannerRetrieverAgent did not return valid response for user {user_id} with course_id {course_id}")
+            
+            logger.info("[%s] PlannerRetrieverAgent responded with title: %s, %d chapters", 
+                       task_id, planner_response['title'], len(planner_response.get('chapters', [])))
 
             # Generate AI course cover image (optional - skip if fails)
-            image_url = "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=800&q=80"  # Default placeholder
+            image_url = DEFAULT_COURSE_IMAGE  # Default placeholder
             try:
                 image_response = await self.image_agent.run(
                     user_id=user_id,
                     state={},
                     content="",
                     image_type="course",
-                    title=info_response['title'],
-                    description=info_response['description'],
+                    title=planner_response['title'],
+                    description=planner_response['description'],
                 )
                 if image_response and image_response.get('url'):
                     image_url = image_response.get('url')
@@ -218,23 +182,21 @@ class AgentService:
             except Exception as e:
                 logger.warning("[%s] Failed to generate course cover image, using default: %s", task_id, str(e))
 
-            # Update course in database
+            # Update course in database with info from PlannerRetrieverAgent
             with get_db_context() as db:
                 course_db = courses_crud.update_course(
                     db=db,
                     course_id=course_id,
                     session_id=session_id,
-                    title=info_response['title'],
-                    description=info_response['description'],
-                    image_url=image_url,  # Use the image_url we retrieved (or None if failed)
+                    title=planner_response['title'],
+                    description=planner_response['description'],
+                    image_url=image_url,
                     total_time_hours=request.time_hours,
+                    chapter_count=len(planner_response["chapters"])
                 )
                 if not course_db:
                     raise ValueError(f"Failed to update course in DB for user {user_id} with course_id {course_id}")
-            print(f"[{task_id}] Course updated in DB with ID: {course_id}")
-
-            # Send Notification to WebSocket
-            ###await ws_manager.send_json_message(task_id, {"type": "course_info", "data": "updating course info"})
+            logger.info("[%s] Course updated in DB with ID: %s", task_id, course_id)
 
             init_state = CourseState(
                 query=request.query,
@@ -244,49 +206,18 @@ class AgentService:
             )
             # Create initial state for the course
             self.state_manager.create_state(user_id, course_id, init_state)
-            print(f"[{task_id}] Initial state created for course {course_id}.")
+            logger.info("[%s] Initial state created for course %s", task_id, course_id)
 
- 
             # Bind documents to this course (bind ALL docs, including non-PDFs)
             with get_db_context() as db:
                 for doc in all_docs:
                     documents_crud.update_document(db, int(doc.id), course_id=course_id)
                 for img in images:
                     images_crud.update_image(db, int(img.id), course_id=course_id)
-            print(f"[{task_id}] Documents and images bound to course.")
+            logger.info("[%s] Documents and images bound to course", task_id)
 
-            # Notify WebSocket about course info
-            ###await ws_manager.send_json_message(task_id, {"type": "course_info", "data": course_info_data})
-            ###print(f"[{task_id}] Sent course_info update.")
-
-            # Query the planner agent with retry
-            response_planner = await retry_with_backoff(
-                lambda: self.planner_agent.run(
-                    user_id=user_id,
-                    state=self.state_manager.get_state(user_id=user_id, course_id=course_id),
-                    content=self.query_service.get_planner_query(request, docs, images),
-                    debug=True
-                ),
-                max_retries=3,
-                initial_delay=5,
-                backoff_factor=2
-            )
-            if not response_planner or "chapters" not in response_planner:
-                raise ValueError(f"PlannerAgent did not return valid chapters for user {user_id} with course_id {course_id}")
-            print(f"[{task_id}] PlannerAgent responded with {len(response_planner.get('chapters', []))} chapters.")
-
-            # Update course in database
-            with get_db_context() as db:
-                course_db = courses_crud.update_course(
-                    db=db,
-                    course_id=course_id,
-                    chapter_count=len(response_planner["chapters"])
-                )
-            # Send notification to WebSocket that course info is being updated
-            ###await ws_manager.send_json_message(task_id, {"type": "course_info", "data": "updating course info"})
-
-            # Save chapters to state
-            self.state_manager.save_chapters(user_id, course_id, response_planner["chapters"])
+            # Save chapters to state (from combined response)
+            self.state_manager.save_chapters(user_id, course_id, planner_response["chapters"])
 
             async def process_chapter(idx: int, topic: dict):
                 try:
@@ -297,12 +228,11 @@ class AgentService:
 
                     # Get code explanation from coding agent with retry
                     logger.info("[%s] Chapter %d: Calling coding agent...", task_id, idx + 1)
-                    response_code = await retry_with_backoff(
-                        lambda: self.coding_agent.run(
-                            user_id=user_id,
-                            state=self.state_manager.get_state(user_id=user_id, course_id=course_id),
-                            content=self.query_service.get_explainer_query(user_id, course_id, idx, request.language, request.difficulty, ragInfos),
-                        ),
+                    response_code = await retry_async_call(
+                        self.coding_agent.run,
+                        user_id=user_id,
+                        state=self.state_manager.get_state(user_id, course_id),
+                        content=self.query_service.get_explainer_query(user_id, course_id, idx, request.language, request.difficulty, ragInfos),
                         max_retries=3,
                         initial_delay=5,
                         backoff_factor=2
@@ -310,7 +240,7 @@ class AgentService:
                     logger.info("[%s] Chapter %d: Coding agent completed", task_id, idx + 1)
 
                     # Generate AI chapter cover image (optional)
-                    chapter_image_url = "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=800&q=80"  # Default placeholder
+                    chapter_image_url = DEFAULT_COURSE_IMAGE  # Default placeholder
                     try:
                         chapter_content_summary = "\n".join(topic.get('content', [])[:5])
                         image_response = await self.image_agent.run(
@@ -320,7 +250,7 @@ class AgentService:
                             image_type="chapter",
                             chapter_caption=topic['caption'],
                             chapter_content=chapter_content_summary,
-                            course_title=info_response.get('title', ''),
+                            course_title=planner_response.get('title', ''),
                         )
                         if image_response and image_response.get('url'):
                             chapter_image_url = image_response.get('url')
@@ -353,12 +283,11 @@ class AgentService:
                         logger.error("[%s] Chapter %d: Missing 'explanation' in coding agent response", task_id, idx + 1)
                         raise ValueError(f"Coding agent response missing 'explanation' field for chapter {idx + 1}")
                     
-                    response_tester = await retry_with_backoff(
-                        lambda: self.tester_agent.run(
-                            user_id=user_id,
-                            state=self.state_manager.get_state(user_id=user_id, course_id=course_id),
-                            content=self.query_service.get_tester_query(user_id, course_id, idx, response_code["explanation"], request.language, request.difficulty) 
-                        ),
+                    response_tester = await retry_async_call(
+                        self.tester_agent.run,
+                        user_id=user_id,
+                        state=self.state_manager.get_state(user_id=user_id, course_id=course_id),
+                        content=self.query_service.get_tester_query(user_id, course_id, idx, response_code["explanation"], request.language, request.difficulty),
                         max_retries=3,
                         initial_delay=5,
                         backoff_factor=2
@@ -381,7 +310,7 @@ class AgentService:
             # Process all chapters in parallel
             chapter_tasks = [
                 process_chapter(idx, topic) 
-                for idx, topic in enumerate(response_planner["chapters"])
+                for idx, topic in enumerate(planner_response["chapters"])
             ]
             
             # Wait for all chapters to be processed
@@ -396,6 +325,12 @@ class AgentService:
             # Update course status to finished
             with get_db_context() as db:
                 courses_crud.update_course_status(db, course_id, CourseStatus.FINISHED)
+
+            # Calculate and log total time taken
+            end_time = time.time()
+            total_time = end_time - start_time
+            logger.info("[%s] ✅ COURSE CREATION COMPLETED in %.2f seconds (%.2f minutes)", 
+                       task_id, total_time, total_time / 60)
 
             # Send completion signal
             #await ws_manager.send_json_message(task_id, {

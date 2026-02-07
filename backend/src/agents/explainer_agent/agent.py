@@ -15,6 +15,7 @@ from litellm import max_tokens
 from ..code_checker.code_checker import ESLintValidator, clean_up_response
 from ..agent import StandardAgent
 from ..utils import load_instructions_from_files, create_text_query
+from ..validated_agent import ValidatedCodeAgent
 
 
 class CodingExplainer(StandardAgent):
@@ -68,49 +69,29 @@ Please only include content about the chapter that is assigned to you in the fol
 class ExplainerAgent(StandardAgent):
     """
     Custom loop agent to provide a feedback loop between the explainer and the react parser.
-    I unfortunately cannot use adks loop agent because of missing functionality,
-    see https://github.com/google/adk-python/issues/1235
+    Uses ValidatedCodeAgent for shared validation logic.
     """
     def __init__(self, app_name: str, session_service, iterations = 5):
         self.explainer = CodingExplainer(app_name=app_name, session_service=session_service)
-        self.eslint = ESLintValidator()
-        self.iterations = iterations
+        self.validated_agent = ValidatedCodeAgent(
+            inner_agent=self.explainer,
+            validator=ESLintValidator(),
+            max_iterations=iterations
+        )
 
     async def run(self, user_id: str, state: dict, content: types.Content, debug: bool = False) -> Dict[str, Any]:
         """
-        Simple for loop to create the logic for the iterated code review.
+        Run the explainer agent with automatic code validation.
+        
         :param user_id: id of the user
         :param state: the state created from the StateService
         :param content: the user query as a type.Content object
         :param debug: if true the method will print auxiliary outputs (all events)
         :return: the parsed dictionary response from the agent
         """
-        validation_check = {"errors": []}
-        for _ in range(self.iterations):
-            output = (await self.explainer.run(user_id=user_id, state=state, content=content))['explanation']
-            validation_check = self.eslint.validate_jsx(output)
-            if validation_check['valid']:
-                print("Code Validation Passed")
-                return {
-                    "success": True,
-                    "explanation": clean_up_response(output),
-                }
-            else:
-                content = create_text_query(
-                f"""
-                You were prompted before, but the code that you output did not pass the syntax validation check.
-                Your previous code:
-                {output}
-                Your code generated the following errors:
-                {json.dumps(validation_check['errors'], indent=2)}
-                
-                Please try again and rewrite your code from scratch, without explanation.
-                Your response should start with () => and end with a curly brace.
-                """)
-                print(f"!!WARNING: Code did not pass syntax validation. Errors: \n{json.dumps(validation_check['errors'], indent=2)}")
-
-        return {
-            "success": False,
-            "explanation": "() => {<div><p>Error: Failed to generate valid content after multiple attempts.</p></div>}",
-            "message": f"Code did not pass syntax check after {self.iterations} iterations. Errors: \n{json.dumps(validation_check['errors'], indent=2)}",
-        }
+        return await self.validated_agent.run_with_validation(
+            user_id=user_id,
+            state=state,
+            content=content,
+            debug=debug
+        )

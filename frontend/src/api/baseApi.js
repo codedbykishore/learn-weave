@@ -3,7 +3,7 @@ import axios from 'axios';
 const API_URL = '/api';
 
 
-// --- Instanz mit Cookies (für Auth) ---
+// --- Instance with Cookies (for Auth) ---
 export const apiWithCookies = axios.create({
   baseURL: API_URL,
   withCredentials: true,
@@ -12,7 +12,7 @@ export const apiWithCookies = axios.create({
   },
 });
 
-// Beispiel: Auth-Interceptor mit Auto-Refresh
+// Example: Auth-Interceptor with Auto-Refresh
 let isRefreshing = false;
 let failedQueue = [];
 

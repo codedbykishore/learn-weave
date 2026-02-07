@@ -148,12 +148,12 @@ import {
               <Group position="center" spacing="sm">
                 <IconRocket size={36} color="var(--mantine-color-blue-5)" />
                 <Title className={classes.title}>
-                  {limitReached ? t('premiumModal.limitReachedTitle', 'Limit erreicht!') : t('premiumModal.title')}
+                  {limitReached ? t('premiumModal.limitReachedTitle', 'Limit Reached!') : t('premiumModal.title')}
                 </Title>
               </Group>
               <Text size="lg" color={limitReached ? 'red' : 'dimmed'} mt="sm">
                 {limitReached 
-                  ? t('premiumModal.limitReachedMessage', 'Sie haben Ihr kostenloses Kontingent an Kursen erreicht.') 
+                  ? t('premiumModal.limitReachedMessage', 'You have reached your free course limit.') 
                   : t('premiumModal.subtitle')}
               </Text>
             </motion.div>
