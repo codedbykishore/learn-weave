@@ -194,7 +194,7 @@ firebase-adminsdk*.json
 .aws/
 *.pem
 credentials
-config
+.aws/config
 
 # SSH Keys
 *.key
