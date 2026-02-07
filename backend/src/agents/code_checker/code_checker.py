@@ -9,6 +9,7 @@ import os
 import shutil
 
 plugin_imports = """
+/* eslint-disable no-unused-vars */
 import * as Recharts from 'recharts';
 import React from "react";
 import 'katex/dist/katex.min.css';
@@ -19,6 +20,7 @@ import { dark } from 'react-syntax-highlighter/dist/esm/styles/hljs'
 import * as RF from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { motion } from "motion/react"
+/* eslint-enable no-unused-vars */
 """
 
 def find_react_code_in_response(text: str) -> str:

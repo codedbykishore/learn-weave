@@ -22,7 +22,7 @@ class TestingFlashcardAgent(StandardAgent):
 
         self.llm_agent = LlmAgent(
             name="testing_flashcard_agent",
-            model="gemini-3-flash-preview",
+            model="gemini-2.5-flash",
             description="Agent for generating multiple choice questions from PDF content",
             global_instruction=lambda _: instructions,
             instruction="Generate multiple choice questions from the provided text content. Focus on key concepts and create plausible distractors."

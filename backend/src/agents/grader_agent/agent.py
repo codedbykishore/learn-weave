@@ -18,7 +18,7 @@ class GraderAgent(StructuredAgent):
         # Create the planner agent
         grader_agent = LlmAgent(
             name="grader_agent",
-            model="gemini-3-flash-preview",
+            model="gemini-2.5-flash",
             description="Agent for testing the user on studied material",
             output_schema=Grading,
             instruction=lambda _: load_instruction_from_file("grader_agent/instructions.txt"),

@@ -20,7 +20,7 @@ class LearningFlashcardAgent(StandardAgent):
 
         self.llm_agent = LlmAgent(
             name="learning_flashcard_agent",
-            model="gemini-3-flash-preview",
+            model="gemini-2.5-flash",
             description="Agent for generating learning flashcards from PDF content",
             global_instruction=lambda _: instructions,
             instruction="Generate front/back learning flashcards from the provided content. Focus on key concepts and understanding."

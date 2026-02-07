@@ -33,7 +33,7 @@ class ChatAgent:
         # Call the base class constructor
         self.chat_agent = LlmAgent(
             name="chat_agent",
-            model="gemini-3-flash-preview",
+            model="gemini-2.5-flash",
             description="Agent for creating a small chat for a course",
             instruction=load_instruction_from_file("chat_agent/instructions.txt"),
         )

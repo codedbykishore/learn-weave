@@ -26,7 +26,7 @@ class HtmlAgent(StandardAgent):
         # gemini-2.5-flash-preview-05-20
         html_agent = LlmAgent(
             name="html_agent",
-            model="gemini-3-flash-preview",
+            model="gemini-2.5-flash",
             description="Agent for creating reveal.js slide decks for great explanations and visualizations.",
             instruction=full_instructions,
         )
