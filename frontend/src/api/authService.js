@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { apiWithCookies, apiWithoutCookies } from './baseApi';
 
-const API_URL = '/api';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 class AuthService {
   async login(username, password) {
@@ -10,7 +10,7 @@ class AuthService {
     formData.append('password', password);
 
     // The backend at /auth/token should set an HTTP-only cookie upon successful login.
-    const response = await apiWithoutCookies.post('/auth/login', formData, {
+    const response = await apiWithCookies.post('/auth/login', formData, {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
@@ -31,7 +31,7 @@ class AuthService {
   }
 
   async register(username, email, password) {
-    return (await apiWithoutCookies.post('/auth/signup', {
+    return (await apiWithCookies.post('/auth/signup', {
       username,
       email,
       password,
@@ -63,17 +63,17 @@ class AuthService {
   // New method for Google OAuth
   redirectToGoogleOAuth() {
     // The backend URL that initiates the Google OAuth flow
-    window.location.href = `/api/auth/login/google`;
+    window.location.href = `${API_URL}/auth/login/google`;
   }
 
   redirectToGithubOAuth() {
-    // The backend URL that initiates the Google OAuth flow
-    window.location.href = `/api/auth/login/github`;
+    // The backend URL that initiates the GitHub OAuth flow
+    window.location.href = `${API_URL}/auth/login/github`;
   }
 
   redirectToDiscordOAuth() {
     // The backend URL that initiates the Discord OAuth flow
-    window.location.href = `/api/auth/login/discord`;
+    window.location.href = `${API_URL}/auth/login/discord`;
   }
 }
 

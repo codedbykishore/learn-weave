@@ -194,7 +194,18 @@ class ESLintValidator:
     def validate_jsx(self, jsx_code: str):
         """
         Validates JSX using NamedTemporaryFile in a specific directory.
+        If ESLint is not available, validation is skipped (returns valid).
         """
+        # Skip validation if ESLint setup was not found during init
+        if self.eslint_base_dir is None:
+            cleaned_code = find_react_code_in_response(jsx_code)
+            if not cleaned_code:
+                return {
+                    'valid': False,
+                    'errors': [{'message': 'Your response does not match the required format. Start your response with () and end with }'}]
+                }
+            return {'valid': True, 'errors': [], 'warnings': [], 'skipped': True}
+
         cleaned_code = find_react_code_in_response(jsx_code)
 
         if not cleaned_code:

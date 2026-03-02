@@ -79,15 +79,27 @@ def verify_token(token: Optional[str]) -> str:
     return user_id
 
 
+def _cookie_params() -> dict:
+    """Return secure/samesite params based on environment.
+
+    Cloud Run (production): SameSite=none + Secure (cross-site cookies between
+    different *.run.app subdomains).
+    Local dev: SameSite=lax + not-Secure (plain HTTP on localhost).
+    """
+    from ..config.settings import IS_CLOUD_RUN
+    if IS_CLOUD_RUN:
+        return {"secure": True, "samesite": "none"}
+    return {"secure": False, "samesite": "lax"}
+
+
 def set_access_cookie(response : Response, access_token: str):
     """Set the access token cookie in the response."""
     response.set_cookie(
         key="access_token",
         value=access_token,
-        path="/",  # send to all paths
+        path="/",
         httponly=True,
-        secure=settings.SECURE_COOKIE,  # use secure cookies if configured
-        samesite="lax" #settings.SAME_SITE,  # use configured SameSite policy
+        **_cookie_params(),
     )
 
 
@@ -96,10 +108,9 @@ def set_refresh_cookie(response : Response, refresh_token: str):
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
-        path="/api/auth/refresh",  # restrict refresh token cookie to this path
+        path="/",
         httponly=True,
-        secure=settings.SECURE_COOKIE,  # use secure cookies if configured
-        samesite= "lax" #settings.SAME_SITE,  # use configured SameSite policy
+        **_cookie_params(),
     )
 
 
@@ -115,7 +126,7 @@ def clear_refresh_cookie(response : Response):
     """Clear the refresh token cookie in the response."""
     response.delete_cookie(
         key="refresh_token",
-        path="/api/auth/refresh",  # restrict refresh token cookie to this path
+        path="/",
     )
 
 

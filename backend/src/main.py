@@ -21,7 +21,7 @@ from .api.routers import chat
 from .api.routers import search as search_router
 from .api.routers import flashcard
 from .api.schemas import user as user_schema
-from .db.database import engine, SessionLocal
+from .db.database import engine, SessionLocal, USE_FIRESTORE
 from .db.models import db_user as user_model
 from .utils import auth
 
@@ -29,10 +29,22 @@ from .core.routines import update_stuck_courses
 from .config.settings import SESSION_SECRET_KEY
 from .core.lifespan import lifespan
 
+import time
 
-
-# Create database tables
-user_model.Base.metadata.create_all(bind=engine)
+# Create database tables (only for MySQL mode)
+# Retry logic handles Cloud SQL proxy sidecar startup delay on Cloud Run
+if not USE_FIRESTORE and engine is not None:
+    for _attempt in range(5):
+        try:
+            user_model.Base.metadata.create_all(bind=engine)
+            break
+        except Exception as e:
+            if _attempt < 4:
+                logging.warning(f"DB connection attempt {_attempt+1}/5 failed: {e}. Retrying in 3s...")
+                time.sleep(3)
+            else:
+                logging.error(f"Failed to connect to database after 5 attempts: {e}")
+                raise
 
 # Create output directory for flashcard files
 output_dir = Path("/tmp/anki_output") if os.path.exists("/tmp") else Path("./anki_output")
@@ -56,14 +68,12 @@ app.add_middleware(
 )
 
 
-# CORS Configuration (remains the same)
-origins = [
-    "http://localhost:3000",
-    "http://localhost:8000",
-]
+# CORS Configuration - Dynamic origins
+from .config.settings import CORS_ORIGINS
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

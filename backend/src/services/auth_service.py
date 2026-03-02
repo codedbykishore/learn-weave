@@ -407,23 +407,26 @@ async def handle_oauth_callback(request: Request, db: Session, website: str = "g
 
     redirect_response = RedirectResponse(url=frontend_base_url)
 
+    # Use environment-aware cookie params (Secure+SameSite=none for Cloud Run,
+    # SameSite=lax for local dev)
+    from ..core.security import _cookie_params
+    cp = _cookie_params()
+
     # Set the access token in the redirect_response cookie
     redirect_response.set_cookie(
         key="access_token",
         value=access_token,
         path="/",
         httponly=True,
-        secure=settings.SECURE_COOKIE,
-        samesite="lax"
+        **cp,
     )
     # Set the refresh token in the redirect_response cookie
     redirect_response.set_cookie(
         key="refresh_token",
         value=refresh_token,
-        path="/api/auth/refresh",
+        path="/",
         httponly=True,
-        secure=settings.SECURE_COOKIE,
-        samesite="lax"
+        **cp,
     )
 
     return redirect_response

@@ -19,8 +19,7 @@ from ..config import settings
 from ..agents.chat_agent.agent import ChatAgent
 from ..agents.utils import create_text_query
 from ..api.schemas.chat import ChatRequest
-from ..config.settings import SQLALCHEMY_ASYNC_DATABASE_URL
-from ..db.database import get_db_context
+from ..db.database import get_db_context, USE_FIRESTORE
 
 from ..db.crud import chapters_crud
 from ..db.crud import usage_crud
@@ -36,15 +35,21 @@ class ChatService:
         
         Sets up database connection pooling and initializes the chat agent.
         """
-        # Initialize the session service with async database URL for Google ADK
-        # The ADK will create its own async engine internally
-        self.session_service = DatabaseSessionService(
-            db_url=SQLALCHEMY_ASYNC_DATABASE_URL,
-            pool_recycle=settings.DB_POOL_RECYCLE,
-            pool_pre_ping=settings.DB_POOL_PRE_PING,
-            pool_size=settings.DB_POOL_SIZE,
-            max_overflow=settings.DB_MAX_OVERFLOW
-        )
+        if USE_FIRESTORE:
+            # Use in-memory sessions for Firestore mode (no MySQL available)
+            from google.adk.sessions import InMemorySessionService
+            self.session_service = InMemorySessionService()
+        else:
+            # Initialize the session service with async database URL for Google ADK
+            # The ADK will create its own async engine internally
+            from ..config.settings import SQLALCHEMY_ASYNC_DATABASE_URL
+            self.session_service = DatabaseSessionService(
+                db_url=SQLALCHEMY_ASYNC_DATABASE_URL,
+                pool_recycle=settings.DB_POOL_RECYCLE,
+                pool_pre_ping=settings.DB_POOL_PRE_PING,
+                pool_size=settings.DB_POOL_SIZE,
+                max_overflow=settings.DB_MAX_OVERFLOW
+            )
         self.chat_agent = ChatAgent("LearnWeave", self.session_service)
 
    

@@ -1,0 +1,111 @@
+steps:
+  # Build backend image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: 
+      - 'build'
+      - '-f'
+      - 'backend/Dockerfile.production'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/backend:latest'
+      - './backend'
+    id: 'build-backend'
+
+  # Push backend image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/backend:latest'
+    id: 'push-backend'
+    waitFor: ['build-backend']
+
+  # Deploy backend to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'learnweave-backend'
+      - '--image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/backend:latest'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--memory=2Gi'
+      - '--cpu=2'
+      - '--timeout=300'
+      - '--min-instances=0'
+      - '--max-instances=10'
+      - '--set-env-vars=USE_FIRESTORE=true,USE_CLOUD_STORAGE=true,GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GOOGLE_CLOUD_LOCATION=${_REGION},GOOGLE_GENAI_USE_VERTEXAI=true,FIRESTORE_DATABASE=(default),GCS_BUCKET_IMAGES=${PROJECT_ID}-images,GCS_BUCKET_UPLOADS=${PROJECT_ID}-uploads,GCS_BUCKET_EXPORTS=${PROJECT_ID}-exports'
+      - '--set-secrets=GOOGLE_CLIENT_ID=google-client-id:latest,GOOGLE_CLIENT_SECRET=google-client-secret:latest,SECRET_KEY=jwt-secret-key:latest'
+    id: 'deploy-backend'
+    waitFor: ['push-backend']
+
+  # Build frontend image (using placeholder URL - will update after backend deploys)
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-f'
+      - 'frontend/Dockerfile.production'
+      - '--build-arg'
+      - 'VITE_API_URL=https://learnweave-backend-placeholder-uc.a.run.app'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/frontend:latest'
+      - './frontend'
+    id: 'build-frontend'
+    waitFor: ['deploy-backend']
+
+  # Push frontend image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/frontend:latest'
+    id: 'push-frontend'
+    waitFor: ['build-frontend']
+
+  # Deploy frontend to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'learnweave-frontend'
+      - '--image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/frontend:latest'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--memory=512Mi'
+      - '--cpu=1'
+      - '--min-instances=0'
+      - '--max-instances=5'
+    id: 'deploy-frontend'
+    waitFor: ['push-frontend']
+
+  # Update backend CORS with frontend URL
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        BACKEND_URL=$$(gcloud run services describe learnweave-backend --region=${_REGION} --format='value(status.url)')
+        FRONTEND_URL=$$(gcloud run services describe learnweave-frontend --region=${_REGION} --format='value(status.url)')
+        gcloud run services update learnweave-backend \
+          --region=${_REGION} \
+          --update-env-vars="CORS_ORIGINS=$$FRONTEND_URL,FRONTEND_BASE_URL=$$FRONTEND_URL,CLOUD_RUN_SERVICE_URL=$$BACKEND_URL"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "🎉 Deployment Complete!"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "Backend:  $$BACKEND_URL"
+        echo "Frontend: $$FRONTEND_URL"
+        echo ""
+        echo "⚠️  NEXT: Update OAuth redirect URIs:"
+        echo "   Add: $$BACKEND_URL/api/auth/google/callback"
+    id: 'update-cors'
+    waitFor: ['deploy-frontend']
+
+substitutions:
+  _REGION: us-central1
+  _REPO: learnweave
+
+timeout: 3600s
+options:
+  machineType: 'E2_HIGHCPU_4'
+  logging: CLOUD_LOGGING_ONLY

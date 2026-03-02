@@ -15,16 +15,26 @@ from google.adk.sessions import InMemorySessionService
 
 from ..utils import create_text_query
 from ..agent import StandardAgent
-from ...config.settings import DEFAULT_COURSE_IMAGE
+from ...config.settings import DEFAULT_COURSE_IMAGE, USE_CLOUD_STORAGE
+from ...services.storage_service import StorageService
 
 logger = getLogger(__name__)
 
-# Persistent image storage directory (survives server restarts)
+# Persistent image storage directory (local development fallback)
 GENERATED_IMAGES_DIR = Path(__file__).parent.parent.parent.parent / "generated_images"
 GENERATED_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
 # The URL prefix used by the static file mount in main.py
 IMAGE_URL_PREFIX = "/api/generated_images"
+
+# Initialize storage service for cloud-aware image saving
+_storage_service = None
+
+def _get_storage_service():
+    global _storage_service
+    if _storage_service is None:
+        _storage_service = StorageService()
+    return _storage_service
 
 # Color palettes mapped to broad subject domains for visual variety
 DOMAIN_PALETTES = {
@@ -247,7 +257,7 @@ class ImageAgent(StandardAgent):
         return svg
 
     async def generate_image(self, title: str, domain: str, seed: str, image_type: str, output_path: str) -> str:
-        """Generate an SVG image and save it to disk."""
+        """Generate an SVG image and save it to disk (local fallback)."""
         svg_content = self._generate_svg_image(title, domain, seed, image_type)
         
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -256,6 +266,21 @@ class ImageAgent(StandardAgent):
         
         logger.info("SVG image saved to %s", output_path)
         return output_path
+
+    async def generate_image_cloud(self, title: str, domain: str, seed: str, image_type: str, filename: str) -> str:
+        """Generate an SVG image and save it to cloud storage. Returns the public URL."""
+        svg_content = self._generate_svg_image(title, domain, seed, image_type)
+        svg_bytes = svg_content.encode('utf-8')
+        
+        storage = _get_storage_service()
+        # Upload to GCS and get public URL
+        blob = storage.bucket_images.blob(filename)
+        blob.upload_from_string(svg_bytes, content_type='image/svg+xml')
+        blob.make_public()
+        url = blob.public_url
+        
+        logger.info("SVG image uploaded to cloud storage: %s", url)
+        return url
 
     async def run(self, user_id: str, state: Dict[str, Any], content: str,
                   image_type: str = "course",
@@ -297,20 +322,30 @@ class ImageAgent(StandardAgent):
         
         # Generate a unique filename using UUID
         filename = f"{image_type}_{user_id}_{uuid.uuid4().hex[:12]}.svg"
-        output_path = str(GENERATED_IMAGES_DIR / filename)
 
         try:
-            await self.generate_image(display_title, domain, seed, image_type, output_path)
+            # Use cloud storage in production, local filesystem in development
+            if USE_CLOUD_STORAGE:
+                try:
+                    image_url = await self.generate_image_cloud(display_title, domain, seed, image_type, filename)
+                    logger.info("Image generated and uploaded to cloud: %s", image_url)
+                except Exception as cloud_err:
+                    logger.warning("Cloud storage upload failed, falling back to data URI: %s", str(cloud_err))
+                    # Fallback: encode SVG as data URI so it survives container restarts
+                    svg_content = self._generate_svg_image(display_title, domain, seed, image_type)
+                    svg_b64 = base64.b64encode(svg_content.encode('utf-8')).decode('utf-8')
+                    image_url = f"data:image/svg+xml;base64,{svg_b64}"
+            else:
+                output_path = str(GENERATED_IMAGES_DIR / filename)
+                await self.generate_image(display_title, domain, seed, image_type, output_path)
+                image_url = f"{IMAGE_URL_PREFIX}/{filename}"
 
-            # Return a URL path that the frontend can use (served by FastAPI static mount)
-            image_url = f"{IMAGE_URL_PREFIX}/{filename}"
-            logger.info("Image generated successfully: %s", image_url)
+            logger.info("Image generated successfully: %s", image_url[:100])
 
             return {
                 "status": "success",
                 "url": image_url,
                 "explanation": image_url,
-                "image_path": output_path,
                 "user_id": user_id,
                 "prompt": content
             }
