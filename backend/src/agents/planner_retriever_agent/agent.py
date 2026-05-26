@@ -9,6 +9,7 @@ from google.adk.runners import Runner
 
 from ..agent import StructuredAgent
 from ..utils import load_instruction_from_file
+from ..model_provider import get_llm_model
 from .schema import CourseInfoWithPath
 
 
@@ -22,7 +23,7 @@ class PlannerRetrieverAgent(StructuredAgent):
         # Create the combined planner-retriever agent
         planner_retriever_agent = LlmAgent(
             name="planner_retriever_agent",
-            model="gemini-2.5-flash",
+            model=get_llm_model(),
             output_schema=CourseInfoWithPath,
             description="Agent for generating course info and planning learning paths",
             instruction=load_instruction_from_file("planner_retriever_agent/instructions.txt"),

@@ -10,6 +10,7 @@ from google.genai import types
 
 from ..agent import StructuredAgent
 from ..utils import load_instruction_from_file
+from ..model_provider import get_llm_model
 from .schema import Grading
 
 
@@ -18,7 +19,7 @@ class GraderAgent(StructuredAgent):
         # Create the planner agent
         grader_agent = LlmAgent(
             name="grader_agent",
-            model="gemini-2.5-flash",
+            model=get_llm_model(),
             description="Agent for testing the user on studied material",
             output_schema=Grading,
             instruction=lambda _: load_instruction_from_file("grader_agent/instructions.txt"),

@@ -8,18 +8,27 @@ logging.basicConfig(level=logging.INFO)
 # Load environment variables from .env file
 load_dotenv()
 
+# LLM provider configuration
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "gemini").strip().lower()
+
 # CRITICAL: Set Google Cloud environment variables IMMEDIATELY for Vertex AI
-# These must be set before any Google imports happen
-GOOGLE_GENAI_USE_VERTEXAI = os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "true")
+# These must be set before any Google imports happen when using Gemini/Vertex.
+GOOGLE_GENAI_USE_VERTEXAI = os.getenv(
+    "GOOGLE_GENAI_USE_VERTEXAI",
+    "true" if LLM_PROVIDER in {"gemini", "google", "vertex"} else "false",
+)
 GOOGLE_CLOUD_PROJECT = os.getenv("GOOGLE_CLOUD_PROJECT")
 GOOGLE_CLOUD_LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
 
-if GOOGLE_GENAI_USE_VERTEXAI:
+if LLM_PROVIDER in {"gemini", "google", "vertex"} and GOOGLE_GENAI_USE_VERTEXAI.lower() == "true":
     os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = GOOGLE_GENAI_USE_VERTEXAI
 if GOOGLE_CLOUD_PROJECT:
     os.environ["GOOGLE_CLOUD_PROJECT"] = GOOGLE_CLOUD_PROJECT
 if GOOGLE_CLOUD_LOCATION:
     os.environ["GOOGLE_CLOUD_LOCATION"] = GOOGLE_CLOUD_LOCATION
+
+# AWS region defaults for Bedrock/S3 deployments.
+AWS_REGION = os.getenv("AWS_REGION", os.getenv("BEDROCK_REGION", "us-east-1"))
 
 
 # Configuration for the application
@@ -65,6 +74,8 @@ SECURE_COOKIE = os.getenv("SECURE_COOKIE", "true").lower() == "true"
 # Detect Cloud Run environment
 CLOUD_RUN_SERVICE = os.getenv("K_SERVICE")  # Set by Cloud Run
 IS_CLOUD_RUN = CLOUD_RUN_SERVICE is not None
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL")
+PUBLIC_FRONTEND_URL = os.getenv("PUBLIC_FRONTEND_URL")
 
 # Database Configuration - Use Firestore in Cloud Run, MySQL for local dev
 USE_FIRESTORE = os.getenv("USE_FIRESTORE", "false").lower() == "true"
@@ -119,18 +130,20 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 if IS_CLOUD_RUN:
     # Production: Use Cloud Run URL or custom domain
     CLOUD_RUN_SERVICE_URL = os.getenv("CLOUD_RUN_SERVICE_URL")
+    BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", CLOUD_RUN_SERVICE_URL or "https://www.learnweave.ai")
     GOOGLE_REDIRECT_URI = os.getenv(
         "GOOGLE_REDIRECT_URI",
-        f"{CLOUD_RUN_SERVICE_URL}/api/auth/google/callback" if CLOUD_RUN_SERVICE_URL else "https://www.learnweave.ai/api/auth/google/callback"
+        f"{BACKEND_BASE_URL}/api/auth/google/callback"
     )
     FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "https://www.learnweave.ai")
 else:
-    # Development: Use localhost
+    # Development/other deployments (e.g. EC2): allow explicit public base URLs
+    BACKEND_BASE_URL = os.getenv("BACKEND_BASE_URL", PUBLIC_BASE_URL or "http://localhost:8000")
     GOOGLE_REDIRECT_URI = os.getenv(
         "GOOGLE_REDIRECT_URI",
-        "http://localhost:8000/api/auth/google/callback"
+        f"{BACKEND_BASE_URL}/api/auth/google/callback"
     )
-    FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "http://localhost:3000")
+    FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", PUBLIC_FRONTEND_URL or "http://localhost:3000")
 
 # Note: GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION are set at the top of this file
 
@@ -139,44 +152,66 @@ GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
 if IS_CLOUD_RUN:
     GITHUB_REDIRECT_URI = os.getenv(
         "GITHUB_REDIRECT_URI",
-        f"{CLOUD_RUN_SERVICE_URL}/api/auth/github/callback" if CLOUD_RUN_SERVICE_URL else "https://www.learnweave.ai/api/auth/github/callback"
+        f"{BACKEND_BASE_URL}/api/auth/github/callback"
     )
 else:
-    GITHUB_REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI", "http://localhost:8000/api/auth/github/callback")
+    GITHUB_REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI", f"{BACKEND_BASE_URL}/api/auth/github/callback")
 
 DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET")
 if IS_CLOUD_RUN:
     DISCORD_REDIRECT_URI = os.getenv(
         "DISCORD_REDIRECT_URI",
-        f"{CLOUD_RUN_SERVICE_URL}/api/auth/discord/callback" if CLOUD_RUN_SERVICE_URL else "https://www.learnweave.ai/api/auth/discord/callback"
+        f"{BACKEND_BASE_URL}/api/auth/discord/callback"
     )
 else:
-    DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", "http://localhost:8000/api/auth/discord/callback")
+    DISCORD_REDIRECT_URI = os.getenv("DISCORD_REDIRECT_URI", f"{BACKEND_BASE_URL}/api/auth/discord/callback")
 
 # Cloud Storage Configuration
 USE_CLOUD_STORAGE = os.getenv("USE_CLOUD_STORAGE", str(IS_CLOUD_RUN)).lower() == "true"
+USE_S3_STORAGE = os.getenv("USE_S3_STORAGE", "false").lower() == "true"
 GCS_BUCKET_IMAGES = os.getenv("GCS_BUCKET_IMAGES")
 GCS_BUCKET_UPLOADS = os.getenv("GCS_BUCKET_UPLOADS")
 GCS_BUCKET_EXPORTS = os.getenv("GCS_BUCKET_EXPORTS")
+S3_BUCKET_IMAGES = os.getenv("S3_BUCKET_IMAGES")
+S3_BUCKET_UPLOADS = os.getenv("S3_BUCKET_UPLOADS")
+S3_BUCKET_EXPORTS = os.getenv("S3_BUCKET_EXPORTS")
 
 CHROMA_DB_URL = os.getenv("CHROMA_DB_URL", "http://localhost:8001")
 
 # Default fallback image for courses/chapters when generation fails
 DEFAULT_COURSE_IMAGE = "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=800&q=80"
 
+# Parse CORS list from env values like: "https://a.com,https://b.com"
+def _parse_csv_env(var_name: str) -> list[str]:
+    raw_value = os.getenv(var_name, "")
+    if not raw_value.strip():
+        return []
+    return [part.strip() for part in raw_value.split(",") if part.strip()]
+
+
 # CORS Origins - Dynamic based on environment
-if IS_CLOUD_RUN:
+configured_origins = _parse_csv_env("CORS_ORIGINS")
+
+if configured_origins:
+    CORS_ORIGINS = configured_origins
+elif IS_CLOUD_RUN:
     CORS_ORIGINS = [
         "https://www.learnweave.ai",
         "https://learnweave.ai",
         os.getenv("FRONTEND_URL", ""),
+        FRONTEND_BASE_URL,
     ]
 else:
     CORS_ORIGINS = [
         "http://localhost:3000",
         "http://localhost:8000",
         "http://127.0.0.1:3000",
+        FRONTEND_BASE_URL,
+        PUBLIC_FRONTEND_URL or "",
     ]
+
+# Keep order while removing empty/duplicate origins.
+CORS_ORIGINS = list(dict.fromkeys([origin for origin in CORS_ORIGINS if origin]))
 
 AGENT_DEBUG_MODE = os.getenv("AGENT_DEBUG_MODE", "true").lower() == "true"

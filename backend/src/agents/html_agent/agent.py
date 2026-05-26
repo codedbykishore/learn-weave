@@ -9,8 +9,7 @@ from google.adk.agents import LlmAgent
 
 from ..agent import StandardAgent
 from ..utils import load_instructions_from_files
-
-from google.adk.models.lite_llm import LiteLlm
+from ..model_provider import get_llm_model
 
 
 class HtmlAgent(StandardAgent):
@@ -26,7 +25,7 @@ class HtmlAgent(StandardAgent):
         # gemini-2.5-flash-preview-05-20
         html_agent = LlmAgent(
             name="html_agent",
-            model="gemini-2.5-flash",
+            model=get_llm_model(),
             description="Agent for creating reveal.js slide decks for great explanations and visualizations.",
             instruction=full_instructions,
         )

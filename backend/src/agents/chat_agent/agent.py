@@ -23,6 +23,8 @@ from google.adk.sessions import DatabaseSessionService
 from google.adk.runners import RunConfig
 from google.adk.agents.run_config import StreamingMode
 
+from ..model_provider import get_llm_model
+
 
 class ChatAgent:
     app_name: str
@@ -33,7 +35,7 @@ class ChatAgent:
         # Call the base class constructor
         self.chat_agent = LlmAgent(
             name="chat_agent",
-            model="gemini-2.5-flash",
+            model=get_llm_model(),
             description="Agent for creating a small chat for a course",
             instruction=load_instruction_from_file("chat_agent/instructions.txt"),
         )

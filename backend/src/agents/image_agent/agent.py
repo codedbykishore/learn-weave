@@ -273,11 +273,7 @@ class ImageAgent(StandardAgent):
         svg_bytes = svg_content.encode('utf-8')
         
         storage = _get_storage_service()
-        # Upload to GCS and get public URL
-        blob = storage.bucket_images.blob(filename)
-        blob.upload_from_string(svg_bytes, content_type='image/svg+xml')
-        blob.make_public()
-        url = blob.public_url
+        url = storage.save_generated_image(svg_bytes, filename, content_type='image/svg+xml')
         
         logger.info("SVG image uploaded to cloud storage: %s", url)
         return url

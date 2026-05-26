@@ -7,7 +7,6 @@ import os
 from typing import AsyncGenerator, Optional, Dict, Any
 
 from google.adk.agents import LlmAgent, BaseAgent, LoopAgent
-from google.adk.models.lite_llm import LiteLlm
 from google.adk.runners import Runner
 from google.genai import types
 from litellm import max_tokens
@@ -16,6 +15,7 @@ from ..code_checker.code_checker import ESLintValidator, clean_up_response
 from ..agent import StandardAgent
 from ..utils import load_instructions_from_files, create_text_query
 from ..validated_agent import ValidatedCodeAgent
+from ..model_provider import get_llm_model
 
 
 class CodingExplainer(StandardAgent):
@@ -49,7 +49,7 @@ Please only include content about the chapter that is assigned to you in the fol
             )"""
         explainer_agent = LlmAgent(
             name="explainer_agent",
-            model="gemini-2.5-flash",
+            model=get_llm_model(),
             description="Agent for creating engaging visual explanations using react",
             global_instruction=lambda _: full_instructions,
             instruction=dynamic_instructions,

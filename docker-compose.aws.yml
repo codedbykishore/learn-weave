@@ -1,0 +1,76 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: learnweave-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      timeout: 20s
+      retries: 12
+      interval: 10s
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: learnweave-chromadb
+    restart: always
+    environment:
+      CHROMA_SERVER_HOST: 0.0.0.0
+      CHROMA_SERVER_HTTP_PORT: 8000
+      PERSIST_DIRECTORY: /chroma/chroma
+      CHROMA_SERVER_ALLOW_RESET: "true"
+      CHROMA_SERVER_CORS_ALLOW_ORIGINS: '["*"]'
+    volumes:
+      - chroma-data:/chroma/chroma
+    ports:
+      - "8001:8000"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.production
+    container_name: learnweave-backend
+    restart: always
+    env_file:
+      - ./backend/.env.aws
+    environment:
+      DB_HOST: mysql
+      CHROMA_DB_URL: http://chromadb:8000
+      USE_FIRESTORE: "false"
+      USE_CLOUD_STORAGE: "false"
+      USE_S3_STORAGE: "true"
+      BACKEND_BASE_URL: ${BACKEND_BASE_URL}
+      PUBLIC_BASE_URL: ${BACKEND_BASE_URL}
+      PUBLIC_FRONTEND_URL: ${FRONTEND_BASE_URL}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.production
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+    container_name: learnweave-frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "80:8080"
+
+volumes:
+  mysql-data:
+  chroma-data:

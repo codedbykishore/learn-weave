@@ -8,6 +8,7 @@ from google.adk.runners import Runner
 from .instructions_txt import instructions
 from .schema import LearningCard
 from ..agent import StandardAgent
+from ..model_provider import get_llm_model
 from ..utils import create_text_query
 
 
@@ -20,7 +21,7 @@ class LearningFlashcardAgent(StandardAgent):
 
         self.llm_agent = LlmAgent(
             name="learning_flashcard_agent",
-            model="gemini-2.5-flash",
+            model=get_llm_model(),
             description="Agent for generating learning flashcards from PDF content",
             global_instruction=lambda _: instructions,
             instruction="Generate front/back learning flashcards from the provided content. Focus on key concepts and understanding."

@@ -14,6 +14,7 @@ from ..agent import StructuredAgent, StandardAgent
 from ..code_checker.code_checker import ESLintValidator, clean_up_response
 from ..utils import load_instruction_from_file, create_text_query, load_instructions_from_files
 from ..validated_agent import ValidatedCodeAgent
+from ..model_provider import get_llm_model
 from .schema import Test
 
 def get_full_instructions(code_review: bool = False,):
@@ -30,7 +31,7 @@ class InitialTesterAgent(StructuredAgent):
         # Create the planner agent
         tester_agent = LlmAgent(
             name="tester_agent",
-            model="gemini-2.5-flash",
+            model=get_llm_model(),
             description="Agent for testing the user on studied material",
             output_schema=Test,
             global_instruction=lambda _: load_instruction_from_file("tester_agent/instructions.txt") + "\n" + get_full_instructions(),
@@ -56,7 +57,7 @@ class CodeReviewAgent(StandardAgent):
         # Create the planner agent
         agent = LlmAgent(
             name="code_review_agent",
-            model="gemini-2.5-flash",
+            model=get_llm_model(),
             description="Agent for testing the user on studied material",
             instruction=lambda _: """
 Please debug the given react code, using the error message provided. Do not add any code, just debug the existing one.

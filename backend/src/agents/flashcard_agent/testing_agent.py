@@ -10,6 +10,7 @@ from google.adk.runners import Runner
 from .instructions_txt import instructions
 from .schema import MultipleChoiceQuestion, TaskStatus
 from ..agent import StandardAgent
+from ..model_provider import get_llm_model
 from ..utils import create_text_query
 
 
@@ -22,7 +23,7 @@ class TestingFlashcardAgent(StandardAgent):
 
         self.llm_agent = LlmAgent(
             name="testing_flashcard_agent",
-            model="gemini-2.5-flash",
+            model=get_llm_model(),
             description="Agent for generating multiple choice questions from PDF content",
             global_instruction=lambda _: instructions,
             instruction="Generate multiple choice questions from the provided text content. Focus on key concepts and create plausible distractors."
