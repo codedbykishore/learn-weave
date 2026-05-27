@@ -8,26 +8,36 @@ from ..database import USE_FIRESTORE
 
 
 
-
-
 ############### CHAPTERS
 def get_chapter_by_id(db: Session, chapter_id: int) -> Optional[Chapter]:
     """Get chapter by ID"""
+    if USE_FIRESTORE:
+        return db.get_chapter('', str(chapter_id))
     return db.query(Chapter).filter(Chapter.id == chapter_id).first()
 
 def get_chapter_by_course_id_and_chapter_id(db: Session, course_id: int, chapter_id: int) -> Optional[Chapter]:
     """Get chapter by course_id and ID. Unnecessary as chapters are unique per course."""
+    if USE_FIRESTORE:
+        return db.get_chapter(str(course_id), str(chapter_id))
     return db.query(Chapter).filter(Chapter.id == chapter_id, Chapter.course_id == course_id).first()
 
 
 
 def get_chapters_by_course_id(db: Session, course_id: int) -> List[Chapter]:
     """Get all chapters for a specific course, ordered by index"""
+    if USE_FIRESTORE:
+        return db.get_course_chapters(str(course_id))
     return db.query(Chapter).filter(Chapter.course_id == course_id).order_by(Chapter.index).all()
 
 
 def get_chapter_by_course_and_index(db: Session, course_id: int, index: int) -> Optional[Chapter]:
     """Get specific chapter by course ID and chapter index"""
+    if USE_FIRESTORE:
+        chapters = db.get_course_chapters(str(course_id))
+        for ch in chapters:
+            if ch.get('index') == index:
+                return ch
+        return None
     return db.query(Chapter).filter(
         and_(Chapter.course_id == course_id, Chapter.index == index)
     ).first()
@@ -36,6 +46,16 @@ def get_chapter_by_course_and_index(db: Session, course_id: int, index: int) -> 
 def create_chapter(db: Session, course_id: int, index: int, caption: str,
                    summary: str, content: str, time_minutes: int, image_url: Optional[str] = None) -> Chapter:
     """Create a new chapter"""
+    if USE_FIRESTORE:
+        return db.create_chapter(str(course_id), {
+            'index': index,
+            'caption': caption,
+            'summary': summary,
+            'content': content,
+            'time_minutes': time_minutes,
+            'is_completed': False,
+            'image_url': image_url,
+        })
     db_chapter = Chapter(
         course_id=course_id,
         index=index,
@@ -54,6 +74,9 @@ def create_chapter(db: Session, course_id: int, index: int, caption: str,
 
 def update_chapter(db: Session, chapter_id: int, **kwargs) -> Optional[Chapter]:
     """Update chapter with provided fields"""
+    if USE_FIRESTORE:
+        db.update_chapter('', str(chapter_id), kwargs)
+        return db.get_chapter('', str(chapter_id))
     chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
     if chapter:
         for key, value in kwargs.items():
@@ -76,6 +99,9 @@ def mark_chapter_incomplete(db: Session, chapter_id: int) -> Optional[Chapter]:
 
 def delete_chapter(db: Session, chapter_id: int) -> bool:
     """Delete chapter by ID (cascades to questions)"""
+    if USE_FIRESTORE:
+        db.delete_chapter('', str(chapter_id))
+        return True
     chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
     if chapter:
         db.delete(chapter)
@@ -86,6 +112,9 @@ def delete_chapter(db: Session, chapter_id: int) -> bool:
 
 def get_completed_chapters_by_course(db: Session, course_id: int) -> List[Chapter]:
     """Get all completed chapters for a course"""
+    if USE_FIRESTORE:
+        chapters = db.get_course_chapters(str(course_id))
+        return [ch for ch in chapters if ch.get('is_completed')]
     return db.query(Chapter).filter(
         and_(Chapter.course_id == course_id, Chapter.is_completed == True)
     ).order_by(Chapter.index).all()
@@ -93,31 +122,26 @@ def get_completed_chapters_by_course(db: Session, course_id: int) -> List[Chapte
 
 def get_chapter_count_by_course(db: Session, course_id: int) -> int:
     """Get total number of chapters in a course"""
+    if USE_FIRESTORE:
+        return len(db.get_course_chapters(str(course_id)))
     return db.query(Chapter).filter(Chapter.course_id == course_id).count()
 
 
 def search_chapters_no_content(db: Session, query: str, user_id: str, limit: int = 10) -> List[Chapter]:
     """
     Search for chapters where title or content contains the query string (case-insensitive).
-    
-    Args:
-        db: Database session
-        query: Search string
-        limit: Maximum number of results to return
-        
-    Returns:
-        List of matching Chapter objects
     """
+    if USE_FIRESTORE:
+        return []
     search = f"%{query}%"
     return (
         db.query(Chapter)
-        .join(Chapter.course)  # Join with Course for access control
+        .join(Chapter.course)
         .filter(
             (Course.user_id == user_id)
         )
         .filter(
             (Chapter.caption.ilike(search)) |
-            #(Chapter.content.ilike(search)) |
             (Chapter.summary.ilike(search))
         )
         .limit(limit)
@@ -127,14 +151,9 @@ def search_chapters_no_content(db: Session, query: str, user_id: str, limit: int
 def search_chapters_indexed(db: Session, query: str, user_id: str, limit: int = 10):
     """
     Search for chapters using full-text search on indexed fields.
-    Args:
-        db: Database session
-        query: Search string
-        user_id: ID of the user to filter by
-        limit: Maximum number of results to return
-    Returns:
-        List of matching Chapter objects
     """
+    if USE_FIRESTORE:
+        return []
 
     stmt = text("""
         SELECT 
@@ -157,7 +176,8 @@ def search_chapters_indexed(db: Session, query: str, user_id: str, limit: int = 
 def get_completed_chapters_count(db, course_id: int) -> int:
     """Get total number of completed chapters in a course"""
     if USE_FIRESTORE:
-        return 0
+        chapters = db.get_course_chapters(str(course_id))
+        return sum(1 for ch in chapters if ch.get('is_completed'))
     return db.query(Chapter).filter(
         and_(Chapter.course_id == course_id, Chapter.is_completed == True)
     ).count()

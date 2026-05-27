@@ -1,0 +1,8 @@
+version: "3"
+web_addr: 127.0.0.1:4041
+agent:
+  authtoken: 3634yyT6VMO9GAZeyzSvSyZvevC_478KsGAaZ7im9DQvvBJhR
+tunnels:
+  frontend:
+    proto: http
+    addr: 3000

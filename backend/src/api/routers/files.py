@@ -6,7 +6,7 @@ import io
 
 from ...db.models.db_user import User
 from ...utils.auth import get_current_active_user
-from ...db.database import get_db
+from ...db.database import get_db, USE_FIRESTORE
 from ...api.schemas.file import (
     DocumentInfo,
     ImageInfo
@@ -54,6 +54,14 @@ def validate_file_type(filename: str, content_type: str, allowed_types: dict) ->
 
 async def verify_document_ownership(doc_id: int, user_id: str, db: Session) -> Document:
     """Verify document belongs to current user."""
+    if USE_FIRESTORE:
+        document = db.get_document(str(doc_id))
+        if not document or document.get('user_id') != str(user_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found or access denied"
+            )
+        return document
     document = db.query(Document).filter(
         Document.id == doc_id,
         Document.user_id == user_id
@@ -69,6 +77,14 @@ async def verify_document_ownership(doc_id: int, user_id: str, db: Session) -> D
 
 async def verify_image_ownership(image_id: int, user_id: int, db: Session) -> Image:
     """Verify image belongs to current user."""
+    if USE_FIRESTORE:
+        image = db.get_image(str(image_id))
+        if not image or image.get('user_id') != str(user_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Image not found or access denied"
+            )
+        return image
     image = db.query(Image).filter(
         Image.id == image_id,
         Image.user_id == user_id
@@ -115,7 +131,16 @@ async def upload_document(
             detail="Empty file not allowed"
         )
 
-    # Create document record
+    if USE_FIRESTORE:
+        doc_id = db.create_document({
+            'user_id': str(current_user.id),
+            'filename': file.filename,
+            'content_type': file.content_type,
+            'file_data': file_data,
+        })
+        return {'id': doc_id, 'user_id': str(current_user.id), 'filename': file.filename,
+                'content_type': file.content_type}
+
     document = Document(
         user_id=current_user.id,
         filename=file.filename,
@@ -139,6 +164,8 @@ async def get_course_documents(
         limit: int = 100
 ):
     """Get all documents belonging to the given course and current user."""
+    if USE_FIRESTORE:
+        return db.get_documents_by_user(str(current_user.id), str(course_id))
     documents = (
         db.query(Document)
         .filter(Document.user_id == current_user.id)
@@ -243,6 +270,9 @@ async def delete_document(
     """Delete a document."""
     document = await verify_document_ownership(doc_id, current_user.id, db)
 
+    if USE_FIRESTORE:
+        db.delete_document(str(doc_id))
+        return document
     db.delete(document)
     db.commit()
 
@@ -282,7 +312,16 @@ async def upload_image(
             detail="Empty file not allowed"
         )
 
-    # Create image record
+    if USE_FIRESTORE:
+        img_id = db.create_image({
+            'user_id': str(current_user.id),
+            'filename': file.filename,
+            'content_type': file.content_type,
+            'image_data': image_data,
+        })
+        return {'id': img_id, 'user_id': str(current_user.id), 'filename': file.filename,
+                'content_type': file.content_type}
+
     image = Image(
         user_id=current_user.id,
         filename=file.filename,
@@ -306,6 +345,8 @@ async def get_course_images(
         limit: int = 100
 ):
     """Get all images belonging to the given course and current user."""
+    if USE_FIRESTORE:
+        return db.get_images_by_user(str(current_user.id), str(course_id))
     images = (
         db.query(Image)
         .filter(Image.user_id == current_user.id)
@@ -407,6 +448,9 @@ async def delete_image(
     """Delete an image."""
     image = await verify_image_ownership(image_id, current_user.id, db)
 
+    if USE_FIRESTORE:
+        db.delete_image(str(image_id))
+        return image
     db.delete(image)
     db.commit()
 

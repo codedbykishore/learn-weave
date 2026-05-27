@@ -71,15 +71,13 @@ async def verify_course_ownership(course_id: int, user_id: str, db) -> Optional:
     
     return course if not isinstance(course, dict) else SimpleNamespace(**course)
 
-def get_chapter_by_id(course_id: int, chapter_id: int, db: Session) -> Chapter:
+def get_chapter_by_id(course_id, chapter_id, db) -> Chapter:
     """
     Get a chapter by its ID within a specific course.
     Raises HTTPException if the chapter does not exist in the course.
     """
 
-    # Get the chapter by course_id and chapter_id
     chapter = chapters_crud.get_chapter_by_course_id_and_chapter_id(db, course_id, chapter_id)
-    # Log the chapter retrieval
     
     if not chapter:
         raise HTTPException(
@@ -87,5 +85,7 @@ def get_chapter_by_id(course_id: int, chapter_id: int, db: Session) -> Chapter:
             detail="Chapter not found in this course"
         )
 
+    if isinstance(chapter, dict):
+        return SimpleNamespace(**chapter)
     return chapter
 

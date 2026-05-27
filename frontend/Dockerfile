@@ -13,7 +13,7 @@ RUN npm ci
 COPY . .
 
 # Build for production
-ARG VITE_API_URL=https://learnweave-backend-140367184766.us-central1.run.app/api
+ARG VITE_API_URL=https://learnweave-backend-497884525119.us-central1.run.app/api
 ENV VITE_API_URL=${VITE_API_URL}
 
 RUN npm run build

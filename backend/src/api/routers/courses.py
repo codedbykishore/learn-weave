@@ -8,7 +8,7 @@ from ...db.models.db_course import Chapter, Course, CourseStatus
 from ...db.models.db_user import User
 from ...services.agent_service import AgentService
 from ...utils.auth import get_current_active_user
-from ...db.database import get_db, get_db_context, SessionLocal
+from ...db.database import get_db, get_db_context, SessionLocal, USE_FIRESTORE
 from ...db.crud import courses_crud, chapters_crud, users_crud, usage_crud
 from ...services import course_service
 from ...services.course_service import verify_course_ownership
@@ -99,15 +99,19 @@ async def create_course_request(
         background_tasks.add_task(
             agent_service.create_course,
                             user_id=str(current_user.id),
-                            course_id=course.id,
+                            course_id=course if USE_FIRESTORE else getattr(course, 'id', course),
                             request=course_request,
             task_id=task_id
         )
 
+        if USE_FIRESTORE:
+            course_id_val = course
+        else:
+            course_id_val = getattr(course, 'id', course)
         return CourseInfo(
-            course_id=int(course.id),
+            course_id=str(course_id_val),
             total_time_hours=course_request.time_hours,
-            status=course.status.value,  # Convert enum to string
+            status=str(getattr(course, 'status', 'creating')),
             completed_chapter_count=0,
         )
                 
@@ -234,9 +238,12 @@ async def mark_chapter_complete(
     chapter = course_service.get_chapter_by_id(course_id, chapter_id, db)
     
     # Mark as completed
-    chapter.is_completed = True
-    db.commit()
-    db.refresh(chapter)
+    if USE_FIRESTORE:
+        chapters_crud.mark_chapter_complete(db, chapter_id)
+    else:
+        chapter.is_completed = True
+        db.commit()
+        db.refresh(chapter)
     
     return {
         "message": f"Chapter '{chapter.caption}' marked as completed",
@@ -269,15 +276,15 @@ async def update_course_details(
     updated_course = courses_crud.update_course(db, course_id, **update_data)
 
     return CourseInfo(
-        course_id=int(updated_course.id),
-        total_time_hours=int(updated_course.total_time_hours),
-        status=str(updated_course.status),
-        title=str(updated_course.title),
-        description=str(updated_course.description),
-        chapter_count=int(updated_course.chapter_count) if updated_course.chapter_count else None,
-        image_url=str(updated_course.image_url) if updated_course.image_url else None,
+        course_id=str(updated_course.id) if not isinstance(updated_course, dict) else str(updated_course.get('id', '')),
+        total_time_hours=int(updated_course.total_time_hours) if not isinstance(updated_course, dict) else int(updated_course.get('total_time_hours', 0)),
+        status=str(updated_course.status) if not isinstance(updated_course, dict) else str(updated_course.get('status', 'creating')),
+        title=str(updated_course.title) if not isinstance(updated_course, dict) else str(updated_course.get('title', '')),
+        description=str(updated_course.description) if not isinstance(updated_course, dict) else str(updated_course.get('description', '')),
+        chapter_count=int(updated_course.chapter_count) if not isinstance(updated_course, dict) and updated_course.chapter_count else None,
+        image_url=str(updated_course.image_url) if not isinstance(updated_course, dict) and updated_course.image_url else None,
         completed_chapter_count=course_service.get_completed_chapters_count(db, course_id),
-        is_public=updated_course.is_public,
+        is_public=updated_course.is_public if not isinstance(updated_course, dict) else updated_course.get('is_public', False),
     )
 
 

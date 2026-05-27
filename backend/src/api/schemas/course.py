@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 from pydantic import BaseModel, Field
 from datetime import datetime
 
@@ -14,22 +14,22 @@ class CourseRequest(BaseModel):
 
 class Chapter(BaseModel):
     """Schema for a chapter in the course."""
-    id: int  # Add this line to include the database ID
+    id: Union[int, str]
     index: int
     caption: str
     summary: str
     content: str
     time_minutes: int
-    is_completed: bool = False  # Also useful for the frontend
-    image_url: Optional[str] = None  # Optional image URL for the chapter
+    is_completed: bool = False
+    image_url: Optional[str] = None
 
     class Config:
-        from_attributes = True  # For Pydantic v2 (replaces orm_mode = True)
+        from_attributes = True
 
 
 class CourseInfo(BaseModel):
     """Schema for a list of courses."""
-    course_id: int
+    course_id: Union[int, str]
     total_time_hours: int
     status: str
     # Information from the agent

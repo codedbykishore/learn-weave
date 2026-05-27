@@ -19,6 +19,7 @@ export default defineConfig({
   ],
   server: {
     port: 3000,
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',
@@ -42,6 +43,12 @@ export default defineConfig({
 
           proxy.on('proxyReq', (proxyReq, req) => {
             console.log(`[Proxy] Redirecting: ${req.method} ${req.url}`);
+            if (req.headers.host) {
+              proxyReq.setHeader('X-Original-Host', req.headers.host);
+              const host = req.headers.host;
+              const isLocal = host.includes('localhost') || host.includes('127.0.0.1') || host.includes('::1');
+              proxyReq.setHeader('X-Original-Proto', isLocal ? 'http' : 'https');
+            }
           });
 
           /*proxy.on('proxyRes', (proxyRes, req) => {

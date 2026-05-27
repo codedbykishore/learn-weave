@@ -2,15 +2,20 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from typing import List, Optional
 from ..models.db_file import Document
+from ..database import USE_FIRESTORE
 
 
 ############### DOCUMENTS
 def get_document_by_id(db: Session, document_id: int) -> Optional[Document]:
     """Get document by ID"""
+    if USE_FIRESTORE:
+        return db.get_document(str(document_id))
     return db.query(Document).filter(Document.id == document_id).first()
 
 def get_documents_by_ids(db: Session, document_ids: List[int]) -> List[Document]:
     """Get multiple documents by their IDs"""
+    if USE_FIRESTORE:
+        return []
     if not document_ids:
         return []
     return db.query(Document).filter(Document.id.in_(document_ids)).all()
@@ -18,16 +23,22 @@ def get_documents_by_ids(db: Session, document_ids: List[int]) -> List[Document]
 
 def get_documents_by_user_id(db: Session, user_id: str) -> List[Document]:
     """Get all documents for a specific user"""
+    if USE_FIRESTORE:
+        return db.get_documents_by_user(str(user_id))
     return db.query(Document).filter(Document.user_id == user_id).all()
 
 
 def get_documents_by_course_id(db: Session, course_id: int) -> List[Document]:
     """Get all documents for a specific course"""
+    if USE_FIRESTORE:
+        return db.get_documents_by_user('', str(course_id))
     return db.query(Document).filter(Document.course_id == course_id).all()
 
 
 def get_documents_by_user_and_course(db: Session, user_id: str, course_id: int) -> List[Document]:
     """Get all documents for a specific user and course"""
+    if USE_FIRESTORE:
+        return db.get_documents_by_user(str(user_id), str(course_id))
     return db.query(Document).filter(
         and_(Document.user_id == user_id, Document.course_id == course_id)
     ).all()
@@ -35,6 +46,8 @@ def get_documents_by_user_and_course(db: Session, user_id: str, course_id: int) 
 
 def get_document_by_filename(db: Session, user_id: str, course_id: int, filename: str) -> Optional[Document]:
     """Get document by filename for a specific user and course"""
+    if USE_FIRESTORE:
+        return None
     return db.query(Document).filter(
         and_(
             Document.user_id == user_id,
@@ -47,6 +60,16 @@ def get_document_by_filename(db: Session, user_id: str, course_id: int, filename
 def create_document(db: Session, course_id: int, user_id: str, filename: str,
                     content_type: str, file_data: bytes) -> Document:
     """Create a new document"""
+    if USE_FIRESTORE:
+        doc_id = db.create_document({
+            'course_id': str(course_id) if course_id else None,
+            'user_id': str(user_id),
+            'filename': filename,
+            'content_type': content_type,
+            'file_data': file_data,
+        })
+        return {'id': doc_id, 'course_id': str(course_id), 'user_id': str(user_id),
+                'filename': filename, 'content_type': content_type, 'file_data': file_data}
     db_document = Document(
         course_id=course_id,
         user_id=user_id,
@@ -62,6 +85,9 @@ def create_document(db: Session, course_id: int, user_id: str, filename: str,
 
 def update_document(db: Session, document_id: int, **kwargs) -> Optional[Document]:
     """Update document with provided fields"""
+    if USE_FIRESTORE:
+        db.update_document(str(document_id), kwargs)
+        return db.get_document(str(document_id))
     document = db.query(Document).filter(Document.id == document_id).first()
     if document:
         for key, value in kwargs.items():
@@ -86,6 +112,9 @@ def update_document_data(db: Session, document_id: int, file_data: bytes,
 
 def delete_document(db: Session, document_id: int) -> bool:
     """Delete document by ID"""
+    if USE_FIRESTORE:
+        db.delete_document(str(document_id))
+        return True
     document = db.query(Document).filter(Document.id == document_id).first()
     if document:
         db.delete(document)
@@ -96,6 +125,8 @@ def delete_document(db: Session, document_id: int) -> bool:
 
 def delete_documents_by_course(db: Session, course_id: int) -> int:
     """Delete all documents for a specific course. Returns number of deleted documents."""
+    if USE_FIRESTORE:
+        return 0
     deleted_count = db.query(Document).filter(Document.course_id == course_id).delete()
     db.commit()
     return deleted_count
@@ -103,6 +134,8 @@ def delete_documents_by_course(db: Session, course_id: int) -> int:
 
 def delete_documents_by_user(db: Session, user_id: str) -> int:
     """Delete all documents for a specific user. Returns number of deleted documents."""
+    if USE_FIRESTORE:
+        return 0
     deleted_count = db.query(Document).filter(Document.user_id == user_id).delete()
     db.commit()
     return deleted_count
@@ -110,16 +143,22 @@ def delete_documents_by_user(db: Session, user_id: str) -> int:
 
 def get_document_count_by_course(db: Session, course_id: int) -> int:
     """Get total number of documents in a course"""
+    if USE_FIRESTORE:
+        return db.get_document_count_by_course(str(course_id))
     return db.query(Document).filter(Document.course_id == course_id).count()
 
 
 def get_document_count_by_user(db: Session, user_id: str) -> int:
     """Get total number of documents for a user"""
+    if USE_FIRESTORE:
+        return len(db.get_documents_by_user(str(user_id)))
     return db.query(Document).filter(Document.user_id == user_id).count()
 
 
 def get_documents_by_content_type(db: Session, user_id: str, content_type: str) -> List[Document]:
     """Get all documents of a specific content type for a user"""
+    if USE_FIRESTORE:
+        return []
     return db.query(Document).filter(
         and_(Document.user_id == user_id, Document.content_type == content_type)
     ).all()

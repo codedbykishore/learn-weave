@@ -338,6 +338,125 @@ class FirestoreAdapter:
         
         return [{**doc.to_dict(), 'id': doc.id} for doc in cards]
     
+    # ==================== DOCUMENT OPERATIONS ====================
+
+    def create_document(self, document_data: Dict[str, Any]) -> str:
+        """Create a new document record"""
+        doc_ref = self.db.collection('documents').document()
+        document_data['created_at'] = firestore.SERVER_TIMESTAMP
+        document_data['updated_at'] = firestore.SERVER_TIMESTAMP
+        doc_ref.set(document_data)
+        return doc_ref.id
+
+    def get_document(self, document_id: str) -> Optional[Dict[str, Any]]:
+        """Get document by ID"""
+        doc = self.db.collection('documents').document(str(document_id)).get()
+        if doc.exists:
+            return {**doc.to_dict(), 'id': doc.id}
+        return None
+
+    def get_documents_by_user(self, user_id: str, course_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get documents for a user, optionally filtered by course"""
+        query = self.db.collection('documents').where('user_id', '==', str(user_id))
+        if course_id:
+            query = query.where('course_id', '==', str(course_id))
+        docs = query.order_by('created_at', direction=firestore.Query.DESCENDING).get()
+        return [{**doc.to_dict(), 'id': doc.id} for doc in docs]
+
+    def update_document(self, document_id: str, update_data: Dict[str, Any]):
+        """Update document"""
+        update_data['updated_at'] = firestore.SERVER_TIMESTAMP
+        self.db.collection('documents').document(str(document_id)).update(update_data)
+
+    def delete_document(self, document_id: str):
+        """Delete document"""
+        self.db.collection('documents').document(str(document_id)).delete()
+
+    def get_document_count_by_course(self, course_id: str) -> int:
+        """Count documents in a course"""
+        docs = self.db.collection('documents').where('course_id', '==', str(course_id)).get()
+        return len(docs)
+
+    # ==================== IMAGE OPERATIONS ====================
+
+    def create_image(self, image_data: Dict[str, Any]) -> str:
+        """Create a new image record"""
+        img_ref = self.db.collection('images').document()
+        image_data['created_at'] = firestore.SERVER_TIMESTAMP
+        image_data['updated_at'] = firestore.SERVER_TIMESTAMP
+        img_ref.set(image_data)
+        return img_ref.id
+
+    def get_image(self, image_id: str) -> Optional[Dict[str, Any]]:
+        """Get image by ID"""
+        doc = self.db.collection('images').document(str(image_id)).get()
+        if doc.exists:
+            return {**doc.to_dict(), 'id': doc.id}
+        return None
+
+    def get_images_by_user(self, user_id: str, course_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get images for a user, optionally filtered by course"""
+        query = self.db.collection('images').where('user_id', '==', str(user_id))
+        if course_id:
+            query = query.where('course_id', '==', str(course_id))
+        imgs = query.order_by('created_at', direction=firestore.Query.DESCENDING).get()
+        return [{**doc.to_dict(), 'id': doc.id} for doc in imgs]
+
+    def update_image(self, image_id: str, update_data: Dict[str, Any]):
+        """Update image"""
+        update_data['updated_at'] = firestore.SERVER_TIMESTAMP
+        self.db.collection('images').document(str(image_id)).update(update_data)
+
+    def delete_image(self, image_id: str):
+        """Delete image"""
+        self.db.collection('images').document(str(image_id)).delete()
+
+    def get_image_count_by_course(self, course_id: str) -> int:
+        """Count images in a course"""
+        imgs = self.db.collection('images').where('course_id', '==', str(course_id)).get()
+        return len(imgs)
+
+    # ==================== QUESTION OPERATIONS ====================
+
+    def create_question(self, question_data: Dict[str, Any]) -> str:
+        """Create a new practice question"""
+        q_ref = self.db.collection(self.QUESTIONS).document()
+        question_data['created_at'] = firestore.SERVER_TIMESTAMP
+        q_ref.set(question_data)
+        return q_ref.id
+
+    def get_question(self, question_id: str) -> Optional[Dict[str, Any]]:
+        """Get question by ID"""
+        doc = self.db.collection(self.QUESTIONS).document(str(question_id)).get()
+        if doc.exists:
+            return {**doc.to_dict(), 'id': doc.id}
+        return None
+
+    def get_questions_by_chapter(self, chapter_id: str) -> List[Dict[str, Any]]:
+        """Get all questions for a chapter"""
+        questions = self.db.collection(self.QUESTIONS)\
+            .where('chapter_id', '==', str(chapter_id))\
+            .get()
+        return [{**doc.to_dict(), 'id': doc.id} for doc in questions]
+
+    def update_question(self, question_id: str, update_data: Dict[str, Any]):
+        """Update question"""
+        self.db.collection(self.QUESTIONS).document(str(question_id)).update(update_data)
+
+    def delete_question(self, question_id: str):
+        """Delete question"""
+        self.db.collection(self.QUESTIONS).document(str(question_id)).delete()
+
+    def delete_questions_by_chapter(self, chapter_id: str):
+        """Delete all questions for a chapter"""
+        questions = self.db.collection(self.QUESTIONS)\
+            .where('chapter_id', '==', str(chapter_id))\
+            .get()
+        batch = self.db.batch()
+        for q in questions:
+            batch.delete(q.reference)
+        batch.commit()
+
     # ==================== BATCH OPERATIONS ====================
     
     def batch_write(self, operations: List[Dict[str, Any]]):

@@ -101,7 +101,14 @@ async def login_google(request: Request):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Google OAuth client is not configured."
         )
-    return await oauth.google.authorize_redirect(request, settings.GOOGLE_REDIRECT_URI)
+    # Use the original host from proxy (ngrok URL) for the redirect URI
+    original_host = request.headers.get("X-Original-Host")
+    if original_host:
+        scheme = request.headers.get("X-Original-Proto", "https")
+        redirect_uri = f"{scheme}://{original_host}/api/auth/google/callback"
+    else:
+        redirect_uri = settings.GOOGLE_REDIRECT_URI
+    return await oauth.google.authorize_redirect(request, redirect_uri)
 
 
 @api_router.get("/google/callback")
@@ -124,7 +131,13 @@ async def login_github(request: Request):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="github OAuth client is not configured."
         )
-    return await oauth.github.authorize_redirect(request, settings.GITHUB_REDIRECT_URI)
+    original_host = request.headers.get("X-Original-Host")
+    if original_host:
+        scheme = request.headers.get("X-Original-Proto", "https")
+        redirect_uri = f"{scheme}://{original_host}/api/auth/github/callback"
+    else:
+        redirect_uri = settings.GITHUB_REDIRECT_URI
+    return await oauth.github.authorize_redirect(request, redirect_uri)
 
 
 @api_router.get("/github/callback")
@@ -146,7 +159,13 @@ async def login_discord(request: Request):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Discord OAuth client is not configured."
         )
-    return await oauth.discord.authorize_redirect(request, settings.DISCORD_REDIRECT_URI)
+    original_host = request.headers.get("X-Original-Host")
+    if original_host:
+        scheme = request.headers.get("X-Original-Proto", "https")
+        redirect_uri = f"{scheme}://{original_host}/api/auth/discord/callback"
+    else:
+        redirect_uri = settings.DISCORD_REDIRECT_URI
+    return await oauth.discord.authorize_redirect(request, redirect_uri)
 
 
 @api_router.get("/discord/callback")

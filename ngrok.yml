@@ -1,0 +1,6 @@
+version: "2"
+web_addr: 127.0.0.1:4040
+tunnels:
+  backend:
+    proto: http
+    addr: 8000

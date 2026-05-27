@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 
-from ...db.database import get_db
+from ...db.database import get_db, USE_FIRESTORE
 from ..schemas.questions import QuestionResponse
 from ...db.crud import questions_crud
 from ...db.models.db_course import Chapter, PracticeQuestion
@@ -49,7 +49,11 @@ async def get_questions_by_chapter_id(
         db: Session = Depends(get_db)
 ):
     course = await verify_course_ownership(course_id, str(current_user.id), db)
-    # Find the specific chapter
+
+    if USE_FIRESTORE:
+        questions = questions_crud.get_questions_by_chapter_id(db, chapter_id)
+        return get_practice_questions(questions)
+
     chapter = (db.query(Chapter)
                .filter(Chapter.id == chapter_id, Chapter.course_id == course_id)
                .first())
@@ -76,7 +80,30 @@ async def save_answer(
     """ Save a user's answer to a question. Also saves user answer plus feedback in the database. """
     course = await verify_course_ownership(course_id, str(current_user.id), db)
 
-    # Find the question first
+    if USE_FIRESTORE:
+        question = questions_crud.get_question_by_id(db, question_id)
+        if not question:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Question not found"
+            )
+        questions_crud.update_question(db, question_id, users_answer=users_answer)
+        updated = questions_crud.get_question_by_id(db, question_id)
+        return QuestionResponse(
+            id=updated.get('id', question_id),
+            type=updated.get('type', ''),
+            question=updated.get('question', ''),
+            answer_a=updated.get('answer_a'),
+            answer_b=updated.get('answer_b'),
+            answer_c=updated.get('answer_c'),
+            answer_d=updated.get('answer_d'),
+            correct_answer=updated.get('correct_answer', ''),
+            explanation=updated.get('explanation', ''),
+            users_answer=updated.get('users_answer'),
+            points_received=updated.get('points_received'),
+            feedback=updated.get('feedback')
+        )
+
     question = (db.query(PracticeQuestion)
                 .filter(PracticeQuestion.id == question_id)
                 .first())
@@ -87,17 +114,14 @@ async def save_answer(
             detail="Question not found"
         )
 
-    # Update question in db
     questions_crud.update_question(
         db,
         question_id,
         users_answer=users_answer
     )
 
-    # Refresh question from db to get updated data
     db.refresh(question)
 
-    # Return the updated question as QuestionResponse
     return QuestionResponse(
         id=question.id,
         type=question.type,
@@ -125,7 +149,39 @@ async def get_feedback(
     """ Get feedback on an open text question. Also saves user answer plus feedback in the database. """
     course = await verify_course_ownership(course_id, str(current_user.id), db)
 
-    # Find the question
+    if USE_FIRESTORE:
+        question = questions_crud.get_question_by_id(db, question_id)
+        if not question:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Question not found"
+            )
+        points, feedback = await agent_service.grade_question(
+            user_id=current_user.id,
+            course_id=course_id,
+            question=question.get('question', ''),
+            correct_answer=question.get('correct_answer', ''),
+            users_answer=users_answer,
+            chapter_id=chapter_id,
+            db=db
+        )
+        questions_crud.update_question(db, question_id, users_answer=users_answer,
+                                       points_received=points, feedback=feedback)
+        return QuestionResponse(
+            id=question_id,
+            type=question.get('type', ''),
+            question=question.get('question', ''),
+            answer_a=question.get('answer_a'),
+            answer_b=question.get('answer_b'),
+            answer_c=question.get('answer_c'),
+            answer_d=question.get('answer_d'),
+            correct_answer=question.get('correct_answer', ''),
+            explanation=question.get('explanation', ''),
+            users_answer=users_answer,
+            points_received=points,
+            feedback=feedback
+        )
+
     question = (db.query(PracticeQuestion)
                 .filter(question_id == PracticeQuestion.id)
                 .first())
