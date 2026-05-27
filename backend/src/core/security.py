@@ -132,19 +132,27 @@ def clear_refresh_cookie(response : Response):
 
 async def get_access_token_from_cookie(request: Request) -> Optional[str]:
     """
-    Extracts the access token from the request's cookies.
+    Extracts the access token from the request's cookies, Authorization header,
+    or query parameter (in that order).
+
     NOTE! THIS FUNCTION WILL NOT RAISE AN EXCEPTION IF THE TOKEN IS MISSING.
     It will return None if the access token is not found in the cookies.
     This is useful for endpoints where the user may not be required to be logged in.
     Or for future fallback mechanisms where the access token might be in a header or query parameter.
     """
+    # 1. Check cookies (HttpOnly - for normal browser flows)
     access_token = request.cookies.get("access_token")
 
-    #if not access_token:
-    #    raise HTTPException(
-    #        status_code=status.HTTP_401_UNAUTHORIZED,
-    #        detail="Not authenticated: Access token missing",
-    #    )
+    # 2. Fallback: check Authorization header (Bearer token - for OAuth fallback)
+    if not access_token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            access_token = auth_header[7:]
+
+    # 3. Fallback: check query parameter (for OAuth redirect fallback)
+    if not access_token:
+        access_token = request.query_params.get("access_token")
+
     return access_token
 
 async def get_refresh_token_from_cookie(request: Request) -> Optional[str]:

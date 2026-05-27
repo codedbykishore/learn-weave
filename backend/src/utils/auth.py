@@ -1,4 +1,6 @@
+import logging
 from typing import Optional
+from types import SimpleNamespace
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -8,7 +10,7 @@ from pydantic import BaseModel
 # Import the SQLAlchemy User model module correctly
 from ..db.models import db_user as user_model
 # Import Pydantic schemas (only TokenData is directly used here)
-from ..db.database import get_db
+from ..db.database import get_db, USE_FIRESTORE
 # Import security utilities
 from ..core import security
 from ..core.security import get_access_token_from_cookie
@@ -16,6 +18,8 @@ from ..core.security import get_access_token_from_cookie
 
 from ..db.crud.users_crud import get_active_user_by_id
 from fastapi import Request # Added Request for get_optional_current_user
+
+logger = logging.getLogger(__name__)
 
 class TokenData(BaseModel):
     """Schema for the token data."""
@@ -35,6 +39,23 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[use
     return authenticated_db_user # Return the SQLAlchemy user model instance
 
 
+async def _get_user_from_db(db, user_id: str):
+    """Fetch user from Firestore or SQL, returns None if not found or inactive."""
+    if USE_FIRESTORE:
+        user_data = db.get_user_by_id(user_id)
+        if not user_data:
+            logger.warning("Firestore user not found for user_id: %s", user_id)
+            return None
+        if not user_data.get('is_active'):
+            logger.warning("Firestore user inactive for user_id: %s", user_id)
+            return None
+        return SimpleNamespace(**user_data)
+    user = get_active_user_by_id(db, user_id)
+    if user is None:
+        logger.warning("SQL user not found for user_id: %s", user_id)
+    return user
+
+
 async def get_current_active_user(access_token: Optional[str] = Depends(get_access_token_from_cookie),
                                   db: Session = Depends(get_db)) -> user_model.User:
     """
@@ -44,19 +65,14 @@ async def get_current_active_user(access_token: Optional[str] = Depends(get_acce
     """
 
     if not access_token:
-        # This case should ideally be handled by get_access_token_from_cookie raising an error.
-        # If oauth2_scheme is also used as a fallback, you might check a header token here.
-        # For a pure cookie-based approach, get_access_token_from_cookie handles the missing token.
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated: Access token missing",
         )
 
-    # Verify the token and extract user ID
     user_id = security.verify_token(access_token)
-
-    # Fetch the user from the database using the user ID
-    user = get_active_user_by_id(db, user_id)
+    logger.info("Verifying access token for user_id: %s", user_id)
+    user = await _get_user_from_db(db, user_id)
 
     if user is None:
         raise HTTPException(
@@ -76,10 +92,9 @@ async def get_current_user_optional(access_token: Optional[str] = Depends(get_ac
     if not access_token:
         return None  # No token means no user, which is acceptable in this context
 
-    # Verify the token and extract user ID
     user_id = security.verify_token(access_token)
-    user = get_active_user_by_id(db, user_id)
-    return user # if user else None
+    logger.info("Optional auth - verifying access token for user_id: %s", user_id)
+    return await _get_user_from_db(db, user_id)
 
 async def get_current_admin_user(current_db_user: user_model.User = Depends(get_current_active_user)) -> user_model.User:
     """Ensure the current user is an admin."""
