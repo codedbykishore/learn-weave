@@ -39,19 +39,30 @@ steps:
     id: 'deploy-backend'
     waitFor: ['push-backend']
 
-  # Build frontend image (using placeholder URL - will update after backend deploys)
-  - name: 'gcr.io/cloud-builders/docker'
+  # Get backend URL after deploy, then build frontend with correct API URL
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
     args:
-      - 'build'
-      - '-f'
-      - 'frontend/Dockerfile.production'
-      - '--build-arg'
-      - 'VITE_API_URL=https://learnweave-backend-placeholder-uc.a.run.app'
-      - '-t'
-      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/frontend:latest'
-      - './frontend'
-    id: 'build-frontend'
+      - '-c'
+      - |
+        BACKEND_URL=$$(gcloud run services describe learnweave-backend --region=${_REGION} --format='value(status.url)')
+        echo "$$BACKEND_URL" > /workspace/backend_url.txt
+    id: 'get-backend-url'
     waitFor: ['deploy-backend']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        BACKEND_URL=$$(cat /workspace/backend_url.txt)
+        docker build \
+          -f frontend/Dockerfile.production \
+          --build-arg VITE_API_URL=$${BACKEND_URL}/api \
+          -t ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/frontend:latest \
+          ./frontend
+    id: 'build-frontend'
+    waitFor: ['get-backend-url']
 
   # Push frontend image
   - name: 'gcr.io/cloud-builders/docker'
@@ -107,5 +118,4 @@ substitutions:
 
 timeout: 3600s
 options:
-  machineType: 'E2_HIGHCPU_4'
   logging: CLOUD_LOGGING_ONLY
