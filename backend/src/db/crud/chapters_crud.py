@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from sqlalchemy import text
 from ..models.db_course import Chapter, Course
+from ..database import USE_FIRESTORE
 
 
 
@@ -153,8 +154,10 @@ def search_chapters_indexed(db: Session, query: str, user_id: str, limit: int = 
     return [Chapter(**row._asdict()) for row in results]
 
 
-def get_completed_chapters_count(db: Session, course_id: int) -> int:
+def get_completed_chapters_count(db, course_id: int) -> int:
     """Get total number of completed chapters in a course"""
+    if USE_FIRESTORE:
+        return 0
     return db.query(Chapter).filter(
         and_(Chapter.course_id == course_id, Chapter.is_completed == True)
     ).count()

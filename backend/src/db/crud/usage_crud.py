@@ -97,7 +97,7 @@ def get_total_time_spent_on_chapters(db, user_id: str) -> int:
     Get the total time spent by a user on chapters.
     """
     if USE_FIRESTORE:
-        return db.count_usage_logs(user_id, "site_visible")
+        return db.count_usage_logs(user_id, "site_visible") * 10
     usages = (
         db.query(Usage)
         .filter(Usage.user_id == user_id, Usage.action == "site_visible", Usage.course_id != None, Usage.chapter_id != None)

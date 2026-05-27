@@ -1,4 +1,5 @@
 
+from types import SimpleNamespace
 from ..db.crud import courses_crud
 from ..db.models import db_course as course_model
 from ..api.schemas.course import CourseInfo
@@ -12,6 +13,7 @@ from typing import Optional
 from ..db.models.db_course import Chapter
 
 from ..db.crud import usage_crud, chapters_crud
+from ..db.database import USE_FIRESTORE
 
 
 
@@ -40,7 +42,7 @@ def get_completed_chapters_count(db: Session, course_id: int) -> int:
     return chapters_crud.get_completed_chapters_count(db, course_id)
 
 
-def get_course_by_id(db: Session, course_id: int, user_id: str) -> Optional[Course]:
+def get_course_by_id(db, course_id: int, user_id: str) -> Optional:
     """
     Get a course by its ID for a specific user.
     Returns None if the course does not exist or does not belong to the user.
@@ -48,7 +50,7 @@ def get_course_by_id(db: Session, course_id: int, user_id: str) -> Optional[Cour
     return courses_crud.get_courses_by_course_id_user_id(db, course_id, user_id)
 
 
-async def verify_course_ownership(course_id: int, user_id: str, db: Session) -> Course:
+async def verify_course_ownership(course_id: int, user_id: str, db) -> Optional:
     """
     Verify that a course belongs to the current user.
     Returns the course if valid, raises HTTPException if not found or unauthorized.
@@ -57,15 +59,17 @@ async def verify_course_ownership(course_id: int, user_id: str, db: Session) -> 
     
     if not course:
         course = courses_crud.get_course_by_id(db, course_id)
-        if course and course.is_public:
-            return course
+        if course:
+            is_public = course.get('is_public') if isinstance(course, dict) else getattr(course, 'is_public', False)
+            if is_public:
+                return course if not isinstance(course, dict) else SimpleNamespace(**course)
 
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Course not found or access denied"
         )
     
-    return course
+    return course if not isinstance(course, dict) else SimpleNamespace(**course)
 
 def get_chapter_by_id(course_id: int, chapter_id: int, db: Session) -> Chapter:
     """

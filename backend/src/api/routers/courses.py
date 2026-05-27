@@ -138,7 +138,7 @@ async def get_user_courses(
 
 @router.get("/{course_id}", response_model=CourseInfo)
 async def get_course_by_id(
-        course_id: int,
+        course_id: str,
         current_user: User = Depends(get_current_active_user),
         db: Session = Depends(get_db)
 ):
@@ -149,24 +149,23 @@ async def get_course_by_id(
     course = await verify_course_ownership(course_id, str(current_user.id), db)
     
     return CourseInfo(
-        course_id=int(course.id),
-        total_time_hours=int(course.total_time_hours),
-        status=str(course.status),
-
-        title=str(course.title),
-        description=str(course.description),
-        chapter_count=int(course.chapter_count) if course.chapter_count else None,
-        image_url= str(course.image_url) if course.image_url else None,
-        completed_chapter_count=course_service.get_completed_chapters_count(db, course.id),
-        is_public=course.is_public,
-        created_at=course.created_at,
+        course_id=course.id,
+        total_time_hours=int(getattr(course, 'total_time_hours', 0) or 0),
+        status=str(getattr(course, 'status', 'creating')),
+        title=str(getattr(course, 'title', '')),
+        description=str(getattr(course, 'description', '')),
+        chapter_count=int(course.chapter_count) if getattr(course, 'chapter_count', None) else None,
+        image_url=getattr(course, 'image_url', None),
+        completed_chapter_count=course_service.get_completed_chapters_count(db, getattr(course, 'id', course_id)),
+        is_public=getattr(course, 'is_public', False),
+        created_at=getattr(course, 'created_at', None),
     )
 
 
 # -------- CHAPTERS ----------
 @router.get("/{course_id}/chapters", response_model=List[ChapterSchema])
 async def get_course_chapters(
-        course_id: int,
+        course_id: str,
         current_user: User = Depends(get_current_active_user),
         db: Session = Depends(get_db)
 ):
@@ -188,8 +187,8 @@ async def get_course_chapters(
 
 @router.get("/{course_id}/chapters/{chapter_id}", response_model=ChapterSchema)
 async def get_chapter_by_id(
-        course_id: int,
-        chapter_id: int,
+        course_id: str,
+        chapter_id: str,
         current_user: User = Depends(get_current_active_user),
         db: Session = Depends(get_db)
 ):
@@ -219,8 +218,8 @@ async def get_chapter_by_id(
 
 @router.patch("/{course_id}/chapters/{chapter_id}/complete")
 async def mark_chapter_complete(
-        course_id: int,
-        chapter_id: int,
+        course_id: str,
+        chapter_id: str,
         current_user: User = Depends(get_current_active_user),
         db: Session = Depends(get_db)
 ):
@@ -250,7 +249,7 @@ async def mark_chapter_complete(
 
 @router.put("/{course_id}", response_model=CourseInfo)
 async def update_course_details(
-        course_id: int,
+        course_id: str,
         title: str = None,
         description: str = None,
         current_user: User = Depends(get_current_active_user),
@@ -284,7 +283,7 @@ async def update_course_details(
 
 @router.patch("/{course_id}/public")
 async def update_course_public_status(
-    course_id: int,
+    course_id: str,
     request: UpdateCoursePublicStatusRequest,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
@@ -309,7 +308,7 @@ async def update_course_public_status(
 
 @router.delete("/{course_id}")
 async def delete_course(
-        course_id: int,
+        course_id: str,
         current_user: User = Depends(get_current_active_user),
         db: Session = Depends(get_db)
 ):
@@ -339,8 +338,8 @@ async def delete_course(
 
 @router.put("/{course_id}/chapters/{chapter_id}", response_model=ChapterSchema)
 async def update_chapter(
-        course_id: int,
-        chapter_id: int,
+        course_id: str,
+        chapter_id: str,
         caption: str,
         summary: str,
         content: str,
@@ -399,8 +398,8 @@ async def update_chapter(
 
 @router.delete("/{course_id}/chapters/{chapter_id}")
 async def delete_chapter(
-        course_id: int,
-        chapter_id: int,
+        course_id: str,
+        chapter_id: str,
         current_user: User = Depends(get_current_active_user),
         db: Session = Depends(get_db)
 ):
@@ -434,8 +433,8 @@ async def delete_chapter(
 
 @router.patch("/{course_id}/chapters/{chapter_id}/incomplete")
 async def mark_chapter_incomplete(
-        course_id: int,
-        chapter_id: int,
+        course_id: str,
+        chapter_id: str,
         current_user: User = Depends(get_current_active_user),
         db: Session = Depends(get_db)
 ):

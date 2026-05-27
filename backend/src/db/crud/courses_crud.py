@@ -174,19 +174,26 @@ def get_public_courses_infos(db: Session, user_id: str, skip: int = 0, limit: in
     return result
 
 
-def get_courses_infos(db: Session, user_id: str, skip: int = 0, limit: int = 200) -> List[CourseInfo]:
-    """Get course info by user ID with completed chapter count
-    
-    Args:
-        db: Database session
-        user_id: ID of the user to get courses for
-        skip: Number of records to skip (for pagination)
-        limit: Maximum number of records to return
-        
-    Returns:
-        List of CourseInfo objects containing course info with completed chapter count
-    """
-    # Subquery to count completed chapters per course
+def get_courses_infos(db, user_id: str, skip: int = 0, limit: int = 200) -> list:
+    """Get course info by user ID with completed chapter count"""
+    if USE_FIRESTORE:
+        courses = db.get_user_courses(str(user_id), limit)
+        result = []
+        for c in courses[skip:]:
+            result.append(CourseInfo(
+                course_id=str(c.get('id', '')),
+                total_time_hours=c.get('total_time_hours', 0),
+                status=str(c.get('status', 'creating')),
+                title=c.get('title', ''),
+                description=c.get('description', ''),
+                chapter_count=c.get('chapter_count', 0),
+                image_url=c.get('image_url'),
+                completed_chapter_count=c.get('completed_chapter_count', 0),
+                is_public=c.get('is_public', False),
+                created_at=c.get('created_at'),
+            ))
+        return result
+
     completed_chapters_subq = (
         select(
             Chapter.course_id,
@@ -197,7 +204,6 @@ def get_courses_infos(db: Session, user_id: str, skip: int = 0, limit: int = 200
         .subquery()
     )
     
-    # Main query joining with the subquery
     courses = (db.query(
             Course,
             sql_func.coalesce(completed_chapters_subq.c.completed_count, 0).label('completed_chapters')
@@ -212,13 +218,12 @@ def get_courses_infos(db: Session, user_id: str, skip: int = 0, limit: int = 200
         .limit(limit)
         .all())
     
-    # Convert to list of CourseInfo objects
     result = []
     for course, completed_chapters in courses:
         course_info = CourseInfo(
             course_id=course.id,
             total_time_hours=course.total_time_hours,
-            status=course.status.value,  # Convert enum to string
+            status=course.status.value,
             title=course.title,
             description=course.description,
             chapter_count=course.chapter_count,
