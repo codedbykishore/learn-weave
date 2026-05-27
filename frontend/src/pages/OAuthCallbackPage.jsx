@@ -33,8 +33,16 @@ function OAuthCallbackPage() {
       // If no explicit OAuth error in query params, attempt to fetch user
       // This relies on the backend having set an HTTP-only cookie
       try {
+        // Extract access_token from URL (fallback if HttpOnly cookie not sent)
+        const accessToken = queryParams.get('access_token');
+        if (accessToken) {
+          console.log("OAuthCallbackPage: Storing access_token in sessionStorage as fallback");
+          sessionStorage.setItem('access_token', accessToken);
+          // Remove token from URL so it's not visible in address bar
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
         console.log("OAuthCallbackPage: Calling fetchAndSetCurrentUser (expecting cookie)...");
-        // fetchAndSetFullUser should now internally use the cookie to call /api/auth/me or similar
         const user = await fetchAndSetCurrentUser(); 
 
         if (user) {
@@ -52,7 +60,7 @@ function OAuthCallbackPage() {
             message: t('notifications.oauthCallback.messageErrorSession'),
             color: 'red',
           });
-          navigate('/login?error=session_verification_failed');
+          navigate('/auth/login?error=session_verification_failed');
         }
       } catch (error) {
         console.error('OAuthCallbackPage: Error during fetchAndSetCurrentUser (cookie auth):', error);

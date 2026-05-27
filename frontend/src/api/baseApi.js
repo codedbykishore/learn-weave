@@ -12,6 +12,15 @@ export const apiWithCookies = axios.create({
   },
 });
 
+// Attach Bearer token from sessionStorage as fallback for OAuth flow
+apiWithCookies.interceptors.request.use((config) => {
+  const token = sessionStorage.getItem('access_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 // Example: Auth-Interceptor with Auto-Refresh
 let isRefreshing = false;
 let failedQueue = [];

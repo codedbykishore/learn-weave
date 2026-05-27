@@ -22,21 +22,20 @@ export const AuthProvider = ({ children }) => {
       if (currentUser && currentUser.id) {
         console.log("AuthContext: Successfully fetched user data:", currentUser);
         setUserState(currentUser);
-        // Store non-sensitive user profile in localStorage for quick access if needed.
         localStorage.setItem('userProfile', JSON.stringify(currentUser)); 
         return currentUser;
       } else {
         console.info("AuthContext: No valid user session found or incomplete user data from API.");
         setUserState(null);
         localStorage.removeItem('userProfile');
+        sessionStorage.removeItem('access_token');
         return null;
       }
     } catch (error) {
       console.error("AuthContext: Error fetching current user:", error);
-      // This error could be a 401 if cookies are invalid/expired and refresh failed.
-      // The interceptor in baseApi.js handles refresh attempts.
       setUserState(null);
       localStorage.removeItem('userProfile');
+      sessionStorage.removeItem('access_token');
       return null;
     } finally {
       setLoading(false);
@@ -120,11 +119,10 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setUserState(null);
       localStorage.removeItem('userProfile');
-      // Optionally, clear other related local storage items if any
+      sessionStorage.removeItem('access_token');
       console.log("AuthContext: Client-side user state and profile cleared.");
       toast.info(t('notifications.logoutSuccess'));
       setLoading(false);
-      // Navigation to login page can be handled by the component calling logout or a route guard.
     }
   }, [t]);
 
