@@ -7,42 +7,67 @@ from ..models.db_course import Course, Chapter
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import select, func as sql_func
 from ...api.schemas.course import CourseInfo
+from ..database import USE_FIRESTORE
 
 
 
 ############### COURSES
-def get_course_by_id(db: Session, course_id: int) -> Optional[Course]:
+def get_course_by_id(db, course_id: int) -> Optional[dict]:
     """Get course by ID"""
+    if USE_FIRESTORE:
+        return db.get_course(str(course_id))
     return db.query(Course).filter(Course.id == course_id).first()
 
 
-def get_course_by_session_id(db: Session, session_id: str) -> Optional[Course]:
+def get_course_by_session_id(db, session_id: str) -> Optional[dict]:
     """Get course by session ID"""
+    if USE_FIRESTORE:
+        return None  # Firestore uses doc IDs, not session IDs
     return db.query(Course).filter(Course.session_id == session_id).first()
 
 
-def get_courses_by_user_id(db: Session, user_id: str) -> List[Course]:
+def get_courses_by_user_id(db, user_id: str) -> List:
     """Get all courses for a specific user"""
+    if USE_FIRESTORE:
+        return db.get_user_courses(str(user_id))
     return db.query(Course).filter(Course.user_id == user_id).all()
 
-def get_courses_by_course_id_user_id(db: Session, course_id: int, user_id: str) -> Optional[Course]:
+def get_courses_by_course_id_user_id(db, course_id: int, user_id: str) -> Optional:
     """Get all courses for a specific user"""
+    if USE_FIRESTORE:
+        course = db.get_course(str(course_id))
+        if course and course.get('user_id') == str(user_id):
+            return course
+        return None
     return db.query(Course).filter(Course.user_id == user_id, Course.id == course_id).first()
 
 
-def get_courses_by_status(db: Session, status: CourseStatus) -> List[Course]:
+def get_courses_by_status(db, status: CourseStatus) -> List:
     """Get all courses with a specific status"""
+    if USE_FIRESTORE:
+        return []
     return db.query(Course).filter(Course.status == status).all()
 
 
-def get_course_count_by_user_id(db: Session, user_id: str) -> int:
+def get_course_count_by_user_id(db, user_id: str) -> int:
     """Get the count of courses for a specific user"""
+    if USE_FIRESTORE:
+        return len(db.get_user_courses(str(user_id)))
     return db.query(Course).filter(Course.user_id == user_id).count()
 
-def create_new_course(db: Session, user_id: str, total_time_hours: int, query_: str,
+def create_new_course(db, user_id: str, total_time_hours: int, query_: str,
                       language: str = "en", difficulty: str = "advanced",
-                      status: CourseStatus = CourseStatus.CREATING) -> Course:
+                      status: CourseStatus = CourseStatus.CREATING) -> str:
     """Create a new course"""
+    if USE_FIRESTORE:
+        return db.create_course({
+            'user_id': str(user_id),
+            'total_time_hours': total_time_hours,
+            'query': query_,
+            'status': status.value if hasattr(status, 'value') else status,
+            'language': language,
+            'difficulty': difficulty,
+        })
     db_course = Course(
         user_id=user_id,
         total_time_hours=total_time_hours,
@@ -58,8 +83,11 @@ def create_new_course(db: Session, user_id: str, total_time_hours: int, query_: 
     return db_course
 
 
-def update_course(db: Session, course_id: int, **kwargs) -> Optional[Course]:
+def update_course(db, course_id: int, **kwargs) -> Optional:
     """Update course with provided fields"""
+    if USE_FIRESTORE:
+        db.update_course(str(course_id), kwargs)
+        return db.get_course(str(course_id))
     course = db.query(Course).filter(Course.id == course_id).first()
     if course:
         for key, value in kwargs.items():
@@ -70,9 +98,9 @@ def update_course(db: Session, course_id: int, **kwargs) -> Optional[Course]:
     return course
 
 
-def update_course_status(db: Session, course_id: int, status: CourseStatus) -> Optional[Course]:
+def update_course_status(db, course_id: int, status: CourseStatus) -> Optional:
     """Update course status"""
-    return update_course(db, course_id, status=status)
+    return update_course(db, course_id, status=status.value if hasattr(status, 'value') else status)
 
 
 def update_course_public_status(db: Session, course_id: int, is_public: bool) -> Optional[Course]:

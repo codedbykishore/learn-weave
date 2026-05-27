@@ -28,17 +28,33 @@ class FirestoreAdapter:
         self.QUESTIONS = 'questions'
         self.CHAT_MESSAGES = 'chat_messages'
         self.SESSIONS = 'sessions'
+        self.USAGE_LOGS = 'usage_logs'
     
     # ==================== USER OPERATIONS ====================
     
-    def create_user(self, user_data: Dict[str, Any]) -> str:
+    def create_user(self, user_data: Dict[str, Any], doc_id: Optional[str] = None) -> str:
         """Create a new user"""
-        user_ref = self.db.collection(self.USERS).document()
+        if doc_id:
+            user_ref = self.db.collection(self.USERS).document(doc_id)
+        else:
+            user_ref = self.db.collection(self.USERS).document()
         user_data['created_at'] = firestore.SERVER_TIMESTAMP
         user_data['updated_at'] = firestore.SERVER_TIMESTAMP
         user_ref.set(user_data)
-        return user_ref.id
+        return doc_id or user_ref.id
     
+    def get_user_by_username(self, username: str) -> Optional[Dict[str, Any]]:
+        """Get user by username"""
+        users = self.db.collection(self.USERS)\
+            .where('username', '==', username)\
+            .limit(1)\
+            .get()
+        
+        if users:
+            doc = users[0]
+            return {**doc.to_dict(), 'id': doc.id}
+        return None
+
     def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
         """Get user by email"""
         users = self.db.collection(self.USERS)\
@@ -89,6 +105,32 @@ class FirestoreAdapter:
             .get()
         
         return [{**doc.to_dict(), 'id': doc.id} for doc in users]
+    
+    def create_usage_log(self, user_id: str, action: str, details: Optional[str] = None):
+        """Log a user action in Firestore usage_logs collection"""
+        self.db.collection(self.USAGE_LOGS).add({
+            'user_id': user_id,
+            'action': action,
+            'details': details,
+            'created_at': firestore.SERVER_TIMESTAMP,
+        })
+
+    def get_usage_logs(self, user_id: str, action: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get usage logs for a user, optionally filtered by action."""
+        query = self.db.collection(self.USAGE_LOGS)\
+            .where('user_id', '==', user_id)
+        if action:
+            query = query.where('action', '==', action)
+        docs = query.order_by('created_at', direction=firestore.Query.DESCENDING).get()
+        return [{**doc.to_dict(), 'id': doc.id} for doc in docs]
+
+    def count_usage_logs(self, user_id: str, action: Optional[str] = None) -> int:
+        """Count usage logs for a user, optionally filtered by action."""
+        query = self.db.collection(self.USAGE_LOGS)\
+            .where('user_id', '==', user_id)
+        if action:
+            query = query.where('action', '==', action)
+        return len(query.get())
     
     # ==================== COURSE OPERATIONS ====================
     

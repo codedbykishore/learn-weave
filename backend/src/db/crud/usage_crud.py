@@ -1,20 +1,17 @@
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from ..models.db_usage import Usage
 from ...api.schemas.statistics import UsagePost
+from ..database import USE_FIRESTORE
 
-def log_usage(db: Session, user_id: str, action: str, course_id: int = None, chapter_id: int = None, details: str = None) -> Usage:
+def log_usage(db, user_id: str, action: str, course_id: int = None, chapter_id: int = None, details: str = None) -> Optional[dict]:
     """
     Log a user action in the database.
-    
-    :param db: Database session
-    :param user_id: ID of the user performing the action
-    :param action: Action performed by the user (e.g., "view", "complete", "start", "create", "delete")
-    :param course_id: Optional course ID if the action is related to a specific course
-    :param chapter_id: Optional chapter ID if the action is related to a specific chapter
-    :param details: Additional details about the action
-    :return: The created Usage object
     """
+    if USE_FIRESTORE:
+        db.create_usage_log(user_id, action, details)
+        return None
+
     usage = Usage(
         user_id=user_id,
         action=action,
@@ -30,63 +27,49 @@ def log_usage(db: Session, user_id: str, action: str, course_id: int = None, cha
     return usage
 
 
-def get_user_usages(db: Session, user_id: str) -> List[Usage]:
+def get_user_usages(db, user_id: str) -> List:
     """
     Get all usage records for a specific user.
-    
-    :param db: Database session
-    :param user_id: ID of the user
-    :return: List of Usage objects for the user
     """
+    if USE_FIRESTORE:
+        return db.get_usage_logs(user_id)
     return db.query(Usage).filter(Usage.user_id == user_id).all()
 
 
-def get_usage_by_action(db: Session, user_id: str, action: str) -> List[Usage]:
+def get_usage_by_action(db, user_id: str, action: str) -> List:
     """
     Get all usage records for a specific user filtered by action.
-    
-    :param db: Database session
-    :param user_id: ID of the user
-    :param action: Action to filter by (e.g., "view", "complete", "start", "create", "delete")
-    :return: List of Usage objects for the user with the specified action
     """
+    if USE_FIRESTORE:
+        return db.get_usage_logs(user_id, action)
     return db.query(Usage).filter(Usage.user_id == user_id, Usage.action == action).all()
 
 
-def log_chat_usage(db: Session, user_id: str, course_id: int, chapter_id: int, message: str) -> Usage:
+def log_chat_usage(db, user_id: str, course_id: int, chapter_id: int, message: str):
     """
     Log a chat message sent by a user.
-    
-    :param db: Database session
-    :param user_id: ID of the user sending the message
-    :param message: The chat message content
-    :return: The created Usage object
     """
     return log_usage(db, user_id, action="chat", course_id=course_id, chapter_id=chapter_id, details=message)
 
 
-def get_total_chat_usages(db: Session, user_id: str) -> int:
+def get_total_chat_usages(db, user_id: str) -> int:
     """
     Get the total number of chat messages sent by a user.
-    
-    :param db: Database session
-    :param user_id: ID of the user
-    :return: Total number of chat messages
     """
+    if USE_FIRESTORE:
+        return db.count_usage_logs(user_id, "chat")
     return db.query(Usage).filter(Usage.user_id == user_id, Usage.action == "chat").count()
 
 
-def get_total_created_courses(db: Session, user_id: str) -> int:
+def get_total_created_courses(db, user_id: str) -> int:
     """
     Get the total number of courses created by a user.
-    
-    :param db: Database session
-    :param user_id: ID of the user
-    :return: Total number of courses created
     """
+    if USE_FIRESTORE:
+        return db.count_usage_logs(user_id, "create_course")
     return db.query(Usage).filter(Usage.user_id == user_id, Usage.action == "create_course").count()
 
-def log_course_creation(db: Session, user_id: str, course_id: int, detail: str) -> Usage:
+def log_course_creation(db, user_id: str, course_id: int, detail: str):
     """
     Log the creation of a course by a user.
     
@@ -97,7 +80,7 @@ def log_course_creation(db: Session, user_id: str, course_id: int, detail: str) 
     """
     return log_usage(db, user_id, action="create_course", course_id=course_id, details=detail)
 
-def log_chapter_completion(db: Session, user_id: str, course_id: int, chapter_id: int) -> Usage:
+def log_chapter_completion(db, user_id: str, course_id: int, chapter_id: int):
     """
     Log the completion of a chapter by a user.
     
@@ -109,14 +92,12 @@ def log_chapter_completion(db: Session, user_id: str, course_id: int, chapter_id
     """
     return log_usage(db, user_id, action="complete_chapter", course_id=course_id, chapter_id=chapter_id)
 
-def get_total_time_spent_on_chapters(db: Session, user_id: str) -> int:
+def get_total_time_spent_on_chapters(db, user_id: str) -> int:
     """
-    Get the total time spent by a user on chapters: Calculate total time: every open followed by a close time differences summed up.
-    Handles edge cases: skips unmatched opens, ignores unmatched closes, and processes in timestamp order.
-    :param db: Database session
-    :param user_id: ID of the user
-    :return: Total time spent on chapters in minutes
+    Get the total time spent by a user on chapters.
     """
+    if USE_FIRESTORE:
+        return db.count_usage_logs(user_id, "site_visible")
     usages = (
         db.query(Usage)
         .filter(Usage.user_id == user_id, Usage.action == "site_visible", Usage.course_id != None, Usage.chapter_id != None)
@@ -129,16 +110,12 @@ def get_total_time_spent_on_chapters(db: Session, user_id: str) -> int:
 def get_user_with_total_usage_time(db: Session, offset: int = 0, limit: int = 200):
     """
     Get users with their total usage time in minutes.
-    
-    :param db: Database session
-    :param offset: Number of records to skip (for pagination)
-    :param limit: Maximum number of records to return (for pagination)
-    :return: List of users with their total usage time in minutes
     """
+    if USE_FIRESTORE:
+        return []
     from sqlalchemy import func
     from ..models.db_user import User
     
-    # Subquery to count site_visible actions per user
     usage_counts = (
         db.query(
             Usage.user_id,
@@ -153,7 +130,6 @@ def get_user_with_total_usage_time(db: Session, offset: int = 0, limit: int = 20
         .subquery()
     )
     
-    # Main query to join with users and calculate total time
     user_usages = (
         db.query(
             User,
@@ -168,7 +144,6 @@ def get_user_with_total_usage_time(db: Session, offset: int = 0, limit: int = 20
         .all()
     )
     
-    # Format the result to include user object and total_usage_time
     return [
         {
             'user': user,
@@ -178,7 +153,7 @@ def get_user_with_total_usage_time(db: Session, offset: int = 0, limit: int = 20
     ]
 
 
-def log_site_usage(db: Session, usage: UsagePost ) -> Usage:
+def log_site_usage(db, usage: UsagePost):
     """
     Log a user action on the site.
     
@@ -193,7 +168,7 @@ def log_site_usage(db: Session, usage: UsagePost ) -> Usage:
         chapter_id=usage.chapter_id,
         details=usage.url)
 
-def log_login(db: Session, user_id: str) -> Usage:
+def log_login(db, user_id: str):
     """
     Log a user login action.
     
@@ -203,7 +178,7 @@ def log_login(db: Session, user_id: str) -> Usage:
     """
     return log_usage(db, user_id, action="login")
 
-def log_admin_login_as(db: Session, user_who: str, user_as: str) -> Usage:
+def log_admin_login_as(db, user_who: str, user_as: str):
     """
     Log an admin login-as action.
     
@@ -215,7 +190,7 @@ def log_admin_login_as(db: Session, user_who: str, user_as: str) -> Usage:
     return log_usage(db, user_who, action="admin_login_as", details="Admin logged in as user: " + user_as)
 
 
-def log_refresh(db: Session, user_id: str) -> Usage:
+def log_refresh(db, user_id: str):
     """
     Log a user refresh action.
     
@@ -225,7 +200,7 @@ def log_refresh(db: Session, user_id: str) -> Usage:
     """
     return log_usage(db, user_id, action="refresh")
 
-def log_logout(db: Session, user_id: str) -> Usage:
+def log_logout(db, user_id: str):
     """
     Log a user logout action.
     
@@ -235,19 +210,17 @@ def log_logout(db: Session, user_id: str) -> Usage:
     """
     return log_usage(db, user_id, action="logout")
 
-def get_login_count(db: Session, user_id: str) -> int:
+def get_login_count(db, user_id: str) -> int:
     """
     Get the total number of login actions for a user.
-    
-    :param db: Database session
-    :param user_id: ID of the user
-    :return: Total number of login actions
     """
+    if USE_FIRESTORE:
+        return db.count_usage_logs(user_id, "login")
     return db.query(Usage).filter(Usage.user_id == user_id, Usage.action == "login").count()
 
 
 
-def log_search(db: Session, user_id: str, query: str) -> Usage:
+def log_search(db, user_id: str, query: str):
     """
     Log a search action performed by a user.
     
